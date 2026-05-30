@@ -77,7 +77,11 @@ python3 sim/validation/simulate.py rps      # route × coverage win-rate grid
 
 ## The Swift simulator
 
-`sim/` is a SwiftPM headless simulator written alongside the web version, with a Python mirror in `sim/validation/` that needs no toolchain. The Python mirror runs anywhere with Python 3. Building the Swift target requires a working Swift toolchain (matched Command Line Tools or full Xcode):
+`sim/` is a SwiftPM headless simulator with a Python mirror in `sim/validation/` that needs no toolchain.
+
+> **Note:** the Swift target currently models only Cover 1 / the slant — it predates the web build. The **Python mirror and `web/sim.js` are the current source of truth** (they include Cover 3 and the man/zone route reads). Sync the Swift sources once a Swift toolchain is available.
+
+The Python mirror runs anywhere with Python 3. Building the Swift target requires a working Swift toolchain (matched Command Line Tools or full Xcode):
 
 ```bash
 cd sim
