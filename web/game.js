@@ -529,7 +529,10 @@
   });
   snapBtn.addEventListener('click', function () {
     if (!chosenRoute) return;
-    const result = Sim.resolvePlay(chosenRoute, coverage, leverage);
+    const result = Sim.resolvePlay({
+      route: chosenRoute, coverage: coverage, leverage: leverage,
+      receiver: P.slot, defender: P.nb, lb: P.mlb, qb: P.qb
+    });
     playReveal(result);
   });
   nextBtn.addEventListener('click', function () {
