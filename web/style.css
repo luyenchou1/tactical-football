@@ -220,6 +220,21 @@ html, body {
 .bd-math { font-size: 11px; color: #6b7686; margin: 6px 0 0 16px; font-family: ui-monospace, Menlo, monospace; display: none; }
 .bd-row.open .bd-math { display: block; }
 
+/* ---------- game over ---------- */
+#gameover { align-items: center; text-align: center; gap: 4px; padding: 18px 0 6px; }
+#go-title { font-size: 12px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
+#go-score { font-size: 64px; font-weight: 900; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+#go-sub { font-size: 13px; color: var(--muted); }
+#go-grade { font-size: 38px; font-weight: 900; color: var(--star); margin: 6px 0; }
+.go-best { font-size: 14px; font-weight: 700; color: var(--muted); }
+.go-best.new { color: var(--good); }
+#new-game-btn {
+  margin-top: 14px; width: 100%; background: var(--los); color: #fff; border: none;
+  border-radius: 12px; padding: 16px; font-size: 17px; font-weight: 800; letter-spacing: 0.06em;
+  cursor: pointer; transition: transform .08s;
+}
+#new-game-btn:active { transform: scale(0.98); }
+
 /* ---------- player card popover ---------- */
 #card-layer {
   position: fixed; inset: 0; z-index: 50;

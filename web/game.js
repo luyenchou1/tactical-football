@@ -70,12 +70,14 @@
     presnap: document.getElementById('presnap'),
     animating: document.getElementById('animating'),
     postplay: document.getElementById('postplay'),
+    gameover: document.getElementById('gameover'),
   };
   const tickCaption = document.getElementById('tick-caption');
   const resultLine = document.getElementById('result-line');
   const breakdownEl = document.getElementById('breakdown');
   const snapBtn = document.getElementById('snap-btn');
   const nextBtn = document.getElementById('next-btn');
+  const newGameBtn = document.getElementById('new-game-btn');
   const hintBtn = document.getElementById('hint-btn');
   const hintBox = document.getElementById('hint-box');
   const levWord = document.getElementById('lev-word');
@@ -92,6 +94,12 @@
   let score = 0;
   let drivePlays = 0, driveStartYard = 25;
   let driveOver = false, driveResult = null;   // 'td' | 'downs' | 'int'
+
+  // Game arc: a game is a fixed number of possessions; score as much as you can.
+  const DRIVES_PER_GAME = 6;
+  let drivesPlayed = 0, tdCount = 0, gameOver = false;
+  let bestScore = Number(localStorage.getItem('tf-best') || 0);
+  const fastMode = /[?&]fast\b/.test(location.search);   // ?fast skips the reveal delays
 
   // ---------- chip rendering ----------
   function buildChips() {
@@ -229,7 +237,7 @@
   }
 
   // ---------- the tick reveal ----------
-  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, fastMode ? 0 : ms); }); }
 
   function buildScript(result) {
     // Returns per-tick positions for the animated actors + ball + captions.
@@ -355,7 +363,7 @@
     const gain = Math.max(0, result.yards | 0);   // a resolved play here only gains or 0
     ballOn += gain; distance -= gain;
     if (ballOn >= 100) {                  // crossed the goal line
-      ballOn = 100; score += 7;
+      ballOn = 100; score += 7; tdCount += 1;
       driveOver = true; driveResult = 'td';
     } else if (distance <= 0) {           // moved the chains
       down = 1;
@@ -382,8 +390,7 @@
         : ordinal(down) + ' & ' + (goalToGo ? 'Goal' : Math.max(1, distance));
     document.getElementById('hud-spot').textContent = fieldPos(ballOn);
     document.getElementById('hud-score').textContent = score;
-    document.getElementById('hud-drive').textContent =
-      Math.max(0, Math.round(ballOn - driveStartYard)) + ' yds';
+    document.getElementById('hud-drive').textContent = drivesPlayed + ' / ' + DRIVES_PER_GAME;
   }
 
   // ---------- stage switching ----------
@@ -393,9 +400,31 @@
 
   // ---------- new drive / new play ----------
   function startDrive() {
+    drivesPlayed += 1;
     ballOn = 25; down = 1; distance = 10; driveStartYard = 25;
     drivePlays = 0; driveOver = false; driveResult = null;
     newPlay();
+  }
+
+  function newGame() {
+    score = 0; tdCount = 0; drivesPlayed = 0; gameOver = false;
+    startDrive();
+  }
+
+  function showGameOver() {
+    gameOver = true;
+    const isBest = score > bestScore;
+    if (isBest) { bestScore = score; try { localStorage.setItem('tf-best', String(score)); } catch (e) {} }
+    const grade = score >= 35 ? 'A+' : score >= 28 ? 'A' : score >= 21 ? 'B'
+                : score >= 14 ? 'C' : score >= 7 ? 'D' : 'F';
+    document.getElementById('go-score').textContent = score;
+    document.getElementById('go-grade').textContent = grade;
+    document.getElementById('go-sub').textContent =
+      tdCount + (tdCount === 1 ? ' touchdown' : ' touchdowns') + ' in ' + DRIVES_PER_GAME + ' drives';
+    const best = document.getElementById('go-best');
+    best.textContent = isBest ? ('New best!  ' + score) : ('Best  ' + bestScore);
+    best.className = isBest ? 'go-best new' : 'go-best';
+    setStage('gameover');
   }
 
   function newPlay() {
@@ -463,8 +492,11 @@
     playReveal(result);
   });
   nextBtn.addEventListener('click', function () {
-    if (driveOver) startDrive(); else newPlay();
+    if (!driveOver) { newPlay(); return; }
+    if (drivesPlayed >= DRIVES_PER_GAME) showGameOver();
+    else startDrive();
   });
+  newGameBtn.addEventListener('click', newGame);
 
   // ---------- boot ----------
   buildChips();
