@@ -1,66 +1,89 @@
 // game.js — DOM, rendering, interaction, and the tick-reveal animation.
-// All matchup math lives in sim.js (window.Sim). This file only turns a
-// resolved play into pixels and handles the pre-snap → snap → breakdown loop.
+// All matchup math lives in sim.js (window.Sim). This file turns a resolved
+// play into pixels and runs the pre-snap → snap → breakdown loop.
+//
+// Pre-snap flow: the defense calls man/zone (shown), you pick a PLAY (which
+// assigns every receiver a route), then pick the TARGET receiver, then snap.
 
 (function () {
   'use strict';
 
+  const CENTER = 26.6;
+
   // ---------- field coordinate system ----------
-  // Yard space: x across the field [0..53.3], y downfield (LOS = 0, + = upfield
-  // toward the defense). The visible window is mapped to the field box 0..100.
   const FIELD = { minY: -9, maxY: 21, width: 53.3 };
   function toLeft(x) { return (x / FIELD.width) * 100; }
   function toTop(y) { return ((FIELD.maxY - y) / (FIELD.maxY - FIELD.minY)) * 100; }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
   // ---------- formation (base positions in yard space) ----------
-  // role: off/def. key flag marks the 5 players in the matchup chain.
   const FORMATION = [
-    // offensive line
     { id: 'C',  team: 'off', num: 55, x: 26.6, y: 0 },
     { id: 'LG', team: 'off', num: 66, x: 23.8, y: 0 },
     { id: 'RG', team: 'off', num: 67, x: 29.4, y: 0 },
     { id: 'LT', team: 'off', num: 73, x: 21.0, y: 0 },
     { id: 'RT', team: 'off', num: 76, x: 32.2, y: 0 },
-    // backs / te / wrs
     { id: 'QB', team: 'off', num: 9,  x: 26.6, y: -5, simKey: 'qb' },
-    { id: 'RB', team: 'off', num: 28, x: 23.2, y: -5 },
-    { id: 'TE', team: 'off', num: 87, x: 18.4, y: 0 },
-    { id: 'X',  team: 'off', num: 80, x: 5.0,  y: 0 },
-    { id: 'Z',  team: 'off', num: 18, x: 48.0, y: 0 },
-    { id: 'SLOT', team: 'off', num: 11, x: 38.0, y: 0, simKey: 'slot', primary: true },
-    // defensive line
+    { id: 'RB', team: 'off', num: 28, x: 23.2, y: -5, simKey: 'rb' },
+    { id: 'TE', team: 'off', num: 87, x: 18.4, y: 0, simKey: 'te' },
+    { id: 'X',  team: 'off', num: 80, x: 5.0,  y: 0, simKey: 'x' },
+    { id: 'Z',  team: 'off', num: 18, x: 48.0, y: 0, simKey: 'z' },
+    { id: 'SLOT', team: 'off', num: 11, x: 38.0, y: 0, simKey: 'slot' },
     { id: 'DE_L', team: 'def', num: 91, x: 21.0, y: 2 },
     { id: 'DT_L', team: 'def', num: 94, x: 24.6, y: 2 },
     { id: 'DT_R', team: 'def', num: 98, x: 28.6, y: 2 },
     { id: 'DE_R', team: 'def', num: 56, x: 32.2, y: 2 },
-    // linebackers
     { id: 'MLB', team: 'def', num: 54, x: 27.0, y: 5.5, simKey: 'mlb' },
     { id: 'SLB', team: 'def', num: 50, x: 33.5, y: 6.0 },
-    // secondary
-    { id: 'CB_X', team: 'def', num: 24, x: 6.0,  y: 5.0 },
-    { id: 'CB_Z', team: 'def', num: 21, x: 47.0, y: 5.0 },
-    { id: 'NB',   team: 'def', num: 27, x: 40.0, y: 4.0, simKey: 'nb' },  // x set by leverage
-    { id: 'SS',   team: 'def', num: 32, x: 18.4, y: 4.5 },
+    { id: 'CB_X', team: 'def', num: 24, x: 6.0,  y: 5.0, simKey: 'cbX' },
+    { id: 'CB_Z', team: 'def', num: 21, x: 47.0, y: 5.0, simKey: 'cbZ' },
+    { id: 'NB',   team: 'def', num: 27, x: 40.0, y: 4.0, simKey: 'nb' },
+    { id: 'SS',   team: 'def', num: 32, x: 18.4, y: 4.5, simKey: 'ss' },
     { id: 'FS',   team: 'def', num: 31, x: 27.0, y: 14.0, simKey: 'fs' },
   ];
+  const baseX = {}; FORMATION.forEach(function (f) { baseX[f.id] = f.x; });
 
-  // Display names for chips that have a sim player (so taps show real cards).
+  // Eligible receivers + their man defender. mlb is also the lane LB.
+  const ELIGIBLE = [
+    { key: 'x',    chip: 'X',    pos: 'X',    defKey: 'cbX', defChip: 'CB_X' },
+    { key: 'z',    chip: 'Z',    pos: 'Z',    defKey: 'cbZ', defChip: 'CB_Z' },
+    { key: 'slot', chip: 'SLOT', pos: 'Slot', defKey: 'nb',  defChip: 'NB' },
+    { key: 'te',   chip: 'TE',   pos: 'TE',   defKey: 'ss',  defChip: 'SS' },
+    { key: 'rb',   chip: 'RB',   pos: 'RB',   defKey: 'mlb', defChip: 'MLB' },
+  ];
+  const elgByKey = {}; ELIGIBLE.forEach(function (e) { elgByKey[e.key] = e; });
+  // man defenders we visibly shade by leverage (skip MLB — it keys the RB underneath)
+  const MAN_SHADE = ELIGIBLE.filter(function (e) { return e.key !== 'rb'; });
+
+  // ---------- playbook ----------
+  const PLAYS = [
+    { id: 'slants',  name: 'Quick Slants', tag: 'man-beater',
+      routes: { x: 'slant', z: 'slant', slot: 'slant', te: 'drag', rb: 'flat' } },
+    { id: 'mesh',    name: 'Mesh', tag: 'man-beater',
+      routes: { x: 'dig', z: 'drag', slot: 'drag', te: 'curl', rb: 'flat' } },
+    { id: 'stick',   name: 'Stick', tag: 'zone-beater',
+      routes: { x: 'out', z: 'curl', slot: 'hitch', te: 'dig', rb: 'flat' } },
+    { id: 'spacing', name: 'Spacing', tag: 'zone-beater',
+      routes: { x: 'hitch', z: 'out', slot: 'curl', te: 'drag', rb: 'flat' } },
+  ];
+
+  // ---------- route geometry (parametric: applied to each receiver's start) ----------
+  function routePath(x, y, route) {
+    const inX = x < CENTER ? 1 : -1;   // toward the middle of the field
+    const out = -inX;                  // toward the nearest sideline
+    switch (route) {
+      case 'slant': return [[x, y], [x, y + 1.5], [x + inX * 2, y + 3.5], [x + inX * 4, y + 5], [x + inX * 4, y + 5], [x + inX * 7, y + 8]];
+      case 'hitch': return [[x, y], [x, y + 3.5], [x, y + 5], [x, y + 4], [x, y + 4], [x, y + 4.5]];
+      case 'out':   return [[x, y], [x, y + 3], [x, y + 5.5], [x + out * 4, y + 6], [x + out * 4, y + 6], [x + out * 7, y + 6.5]];
+      case 'drag':  return [[x, y], [x + inX * 2, y + 1], [x + inX * 5, y + 2.5], [x + inX * 9, y + 3.5], [x + inX * 9, y + 3.5], [x + inX * 13, y + 4.5]];
+      case 'dig':   return [[x, y], [x, y + 4], [x, y + 8], [x + inX * 4, y + 10], [x + inX * 4, y + 10], [x + inX * 8, y + 11]];
+      case 'curl':  return [[x, y], [x, y + 5], [x, y + 9], [x, y + 8], [x, y + 8], [x, y + 8]];
+      case 'flat':  return [[x, y], [x + out * 2, y + 1], [x + out * 4, y + 1.5], [x + out * 6, y + 2], [x + out * 6, y + 2], [x + out * 9, y + 2.5]];
+      default:      return [[x, y], [x, y + 2], [x, y + 4], [x, y + 5], [x, y + 5], [x, y + 6]];
+    }
+  }
+
   const P = Sim.DEFAULT_PLAYERS;
-
-  // ---------- slot route geometry (yard-space keyframes T0..T5) ----------
-  // Right-side receiver: smaller x = inside (toward middle), larger x = sideline.
-  const ROUTE_PATHS = {
-    slant: [[38, 0], [38, 3], [34, 6], [31, 8], [31, 8], [27, 11]],
-    out:   [[38, 0], [38, 4], [43, 6], [47, 6], [47, 6], [47, 9]],
-    hitch: [[38, 0], [38, 6], [38, 4], [38, 4], [38, 4], [37, 6]],
-  };
-  // Faint default routes for the other receivers (pre-snap preview only).
-  const DEFAULT_ROUTES = {
-    X:  [[5, 0], [5, 12]],
-    Z:  [[48, 0], [48, 6], [52, 7]],
-    TE: [[18.4, 0], [13, 1]],
-    RB: [[23.2, -5], [30, -3]],
-  };
 
   // ---------- DOM refs ----------
   const fieldEl = document.getElementById('field');
@@ -86,47 +109,39 @@
   const readBanner = document.getElementById('read-banner');
   const driveBanner = document.getElementById('drive-banner');
   const endzoneEl = document.getElementById('endzone');
+  const playPickerEl = document.getElementById('play-picker');
+  const targetPickerEl = document.getElementById('target-picker');
+  const targetLabel = document.getElementById('target-label');
 
   // ---------- game state ----------
-  const chips = {};            // id -> element
-  let leverage = 'outside';
+  const chips = {};
   let coverage = 'man';
-  let chosenRoute = null;
-  // Drive + scoreboard. ballOn = yards from our own goal (0..100); we drive toward 100.
-  // A drive ends in a touchdown (+7), a turnover on downs, or an interception.
+  const levMap = {};                 // defKey -> 'inside' | 'outside' (man shade)
+  let chosenPlay = null, chosenTarget = null;
   let down = 1, distance = 10, ballOn = 25;
   let score = 0;
   let drivePlays = 0, driveStartYard = 25;
   let driveOver = false, driveResult = null;   // 'td' | 'downs' | 'int'
 
-  // Game arc: each game is DRIVES_PER_GAME rounds. In a round you get a
-  // possession, then the opponent gets one (abstracted). Outscore them.
   const DRIVES_PER_GAME = 5;
   let drivesPlayed = 0, tdCount = 0, gameOver = false;
   let cpuScore = 0;
   let bestScore = Number(localStorage.getItem('tf-best') || 0);
-  const fastMode = /[?&]fast\b/.test(location.search);   // ?fast skips the reveal delays
+  const fastMode = /[?&]fast\b/.test(location.search);
 
   // ---------- chip rendering ----------
   function buildChips() {
     FORMATION.forEach(function (p) {
       const el = document.createElement('div');
-      el.className = 'chip ' + p.team + (p.simKey ? ' key' : '') + (p.primary ? ' primary' : '');
+      el.className = 'chip ' + p.team + (p.simKey ? ' key' : '');
       el.textContent = p.num;
-      if (p.primary) {
-        const s = document.createElement('span');
-        s.className = 'star'; s.textContent = '★';
-        el.appendChild(s);
-      }
       el.addEventListener('click', function (e) { e.stopPropagation(); showCard(p); });
       fieldEl.appendChild(el);
       chips[p.id] = el;
     });
-    // LOS + first-down lines
     addFieldLine('los', 0);
-    addFieldLine('first', distanceToGo());
+    addFieldLine('first', distance);
   }
-  function distanceToGo() { return distance; } // yards beyond LOS for first down marker
 
   function addFieldLine(kind, yd) {
     const line = document.createElement('div');
@@ -143,10 +158,18 @@
   }
 
   function resetFormation() {
+    const shade = {};
+    if (coverage === 'man') {
+      MAN_SHADE.forEach(function (e) {
+        const rx = baseX[e.chip];
+        const sideline = rx < CENTER ? -1 : 1;
+        const dir = (levMap[e.defKey] === 'outside') ? sideline : -sideline;
+        shade[e.defChip] = rx + dir * 1.6;
+      });
+    }
     FORMATION.forEach(function (p) {
-      let x = p.x;
-      if (p.id === 'NB') x = leverage === 'outside' ? 40.0 : 36.0; // shade the slot
-      placeChip(p.id, x, p.y);
+      placeChip(p.id, shade[p.id] !== undefined ? shade[p.id] : p.x, p.y);
+      chips[p.id].classList.remove('primary');
     });
     ballEl.style.opacity = '0';
     placeBall(26.6, 0);
@@ -163,32 +186,25 @@
   }
   function drawPolyline(pts, color, faint) {
     const el = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    const s = pts.map(function (p) { return toLeft(p[0]) + ',' + toTop(p[1]); }).join(' ');
-    el.setAttribute('points', s);
+    el.setAttribute('points', pts.map(function (p) { return toLeft(p[0]) + ',' + toTop(p[1]); }).join(' '));
     el.setAttribute('fill', 'none');
     el.setAttribute('stroke', color);
     el.setAttribute('stroke-width', faint ? '0.8' : '1.6');
     el.setAttribute('stroke-linejoin', 'round');
     el.setAttribute('stroke-linecap', 'round');
     el.setAttribute('vector-effect', 'non-scaling-stroke');
-    if (faint) {
-      el.setAttribute('opacity', '0.5');
-      el.setAttribute('marker-end', 'url(#arrow-faint)');
-      el.style.color = 'rgba(255,255,255,0.35)';
-    } else {
-      el.setAttribute('marker-end', 'url(#arrow)');
-      el.style.color = color;
-    }
+    if (faint) { el.setAttribute('opacity', '0.5'); el.setAttribute('marker-end', 'url(#arrow-faint)'); el.style.color = 'rgba(255,255,255,0.35)'; }
+    else { el.setAttribute('marker-end', 'url(#arrow)'); el.style.color = color; }
     routesSvg.appendChild(el);
   }
-  function drawPreview() {
+  function drawPlayRoutes() {
     clearRoutes();
-    Object.keys(DEFAULT_ROUTES).forEach(function (id) {
-      drawPolyline(DEFAULT_ROUTES[id], 'rgba(255,255,255,0.35)', true);
+    if (!chosenPlay) return;
+    ELIGIBLE.forEach(function (e) {
+      const pts = routePath(baseX[e.chip], FORMATION.find(function (f) { return f.id === e.chip; }).y, chosenPlay.routes[e.key]);
+      const isTgt = (e.key === chosenTarget);
+      drawPolyline(pts, isTgt ? '#ffcf33' : 'rgba(255,255,255,0.45)', !isTgt);
     });
-    if (chosenRoute) {
-      drawPolyline(ROUTE_PATHS[chosenRoute], '#ffcf33', false);
-    }
   }
 
   // ---------- player stat card ----------
@@ -208,16 +224,12 @@
     const color = p.team === 'off' ? 'var(--off)' : 'var(--def)';
     let grid = '';
     keys.forEach(function (k) {
-      const v = ratings[k];
       grid += '<div class="stat"><span class="k">' + k + '</span>' +
-              '<span class="v ' + ratingClass(v) + '">' + v + '</span></div>';
+              '<span class="v ' + ratingClass(ratings[k]) + '">' + ratings[k] + '</span></div>';
     });
     cardEl.innerHTML =
-      '<div class="card-top">' +
-        '<div class="card-num" style="background:' + color + '">' + p.num + '</div>' +
-        '<div><div class="card-name">' + name + '</div>' +
-        '<div class="card-pos">' + posName(p) + '</div></div>' +
-      '</div>' +
+      '<div class="card-top"><div class="card-num" style="background:' + color + '">' + p.num + '</div>' +
+      '<div><div class="card-name">' + name + '</div><div class="card-pos">' + posName(p) + '</div></div></div>' +
       '<div class="card-stars">' + starStr(avg) + '</div>' +
       '<div class="card-grid">' + grid + '</div>' +
       '<button class="card-close">Close</button>';
@@ -226,17 +238,14 @@
   }
   function hideCard() { cardLayer.classList.add('hidden'); }
   cardLayer.addEventListener('click', function (e) { if (e.target === cardLayer) hideCard(); });
-
   function posName(p) {
     const map = { QB: 'Quarterback', SLOT: 'Slot WR', NB: 'Nickel CB', MLB: 'Linebacker',
                   FS: 'Free Safety', X: 'Wide Receiver', Z: 'Wide Receiver', TE: 'Tight End',
-                  RB: 'Running Back', SS: 'Strong Safety' };
+                  RB: 'Running Back', SS: 'Strong Safety', CB_X: 'Cornerback', CB_Z: 'Cornerback' };
     return map[p.id] || (p.team === 'off' ? 'Offense' : 'Defense');
   }
-  // deterministic-ish filler ratings for non-sim chips so taps always work
   function genericRatings(p) {
-    const seed = p.num;
-    const base = p.team === 'off' ? 72 : 74;
+    const seed = p.num, base = p.team === 'off' ? 72 : 74;
     function r(off) { return Math.max(55, Math.min(92, base + ((seed * (off + 3)) % 17) - 8)); }
     if (p.team === 'off') return { STR: r(1), RBK: r(2), PBK: r(3), AWR: r(4), AGI: r(5) };
     return { TKL: r(1), PRS: r(2), SPD: r(3), AWR: r(4), STR: r(5) };
@@ -246,54 +255,45 @@
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, fastMode ? 0 : ms); }); }
 
   function buildScript(result) {
-    // Returns per-tick positions for the animated actors + ball + captions.
-    const route = result.meta.route;
-    const slotPath = ROUTE_PATHS[route];
-    const sep = result.meta.sep;
-    const catchPt = slotPath[4];                 // where the ball arrives
-    const caught = result.meta.caught;
-    const intercepted = result.meta.intercepted;
-    const undercut = result.meta.undercut;
+    const meta = result.meta;
+    const sep = meta.sep, caught = meta.caught, intercepted = meta.intercepted, inLane = meta.undercut;
+    const paths = {};
+    ELIGIBLE.forEach(function (e) {
+      paths[e.chip] = routePath(baseX[e.chip], FORMATION.find(function (f) { return f.id === e.chip; }).y, chosenPlay.routes[e.key]);
+    });
+    const tgt = elgByKey[chosenTarget];
+    const catchPt = paths[tgt.chip][3];
 
-    // NB trails the slot, beaten to the side the route breaks toward.
-    const breakDir = route === 'slant' ? +1 : route === 'out' ? -1 : 0; // +1 = NB left behind toward sideline
-    function nbAt(t) {
-      const s = slotPath[t];
-      if (t <= 1) return [leverage === 'outside' ? 40 : 36, 4 + t]; // pre-break shade
-      return [s[0] + breakDir * (sep * 0.7), s[1] - (0.6 + sep * 0.55)];
+    function defAt(e, t) {
+      const rp = paths[e.chip][t];
+      if (coverage === 'zone') {                       // hold the zone, slight drop
+        return [baseX[e.defChip], FORMATION.find(function (f) { return f.id === e.defChip; }).y + Math.min(t * 0.4, 1.6)];
+      }
+      const beat = (e.key === chosenTarget ? sep * 0.8 : 0.4);
+      const sideline = baseX[e.chip] < CENTER ? -1 : 1;
+      return [rp[0] + sideline * Math.min(beat, 2), rp[1] - (0.5 + beat * 0.3)];
     }
-    // MLB: drifts up; if undercut, jumps the catch point at the throw.
     function mlbAt(t) {
-      if (undercut && t >= 3) return [catchPt[0] + 1.2, catchPt[1] - 0.6];
-      return [27 + t * 0.3, 5.5 + t * 0.6];
-    }
-    // FS: deep, comes downhill once the ball is out (pursuit).
-    function fsAt(t) {
-      if (t < 3) return [27, 14 - t * 0.3];
-      return [catchPt[0] * 0.4 + 27 * 0.6, Math.max(catchPt[1] + 2, 14 - (t - 2) * 2.2)];
+      if (inLane && t >= 3) return [catchPt[0] + (catchPt[0] < CENTER ? 1 : -1), catchPt[1] - 0.6];
+      return [27 + t * 0.2, 5.5 + t * 0.5];
     }
     function ballAt(t) {
-      if (t === 0) return [26.6, 0];
-      if (t === 1 || t === 2) return [26.6, -4.5];
-      if (t === 3) return catchPt;                 // throw travels
-      if (t === 4) return catchPt;
-      // t === 5
-      if (intercepted) return nbAt(5);
-      if (caught) return slotPath[5];
-      return [catchPt[0], catchPt[1] - 1];         // incomplete: ball falls
+      if (t <= 2) return [26.6, -3];
+      if (t === 3 || t === 4) return catchPt;
+      if (intercepted) return defAt(tgt, 5);
+      if (caught) return paths[tgt.chip][5];
+      return [catchPt[0], catchPt[1] - 1];
     }
-
+    const throwQ = (result.chain.find(function (c) { return c.key === 'throw'; }) || { value: '' }).value;
     const captions = [
       'Snap…',
-      P.slot.name + ' releases',
-      sep >= 2 ? 'Separation!' : sep === 1 ? 'A step open' : 'Blanketed',
-      'Throw — ' + (result.chain.find(function (c) { return c.key === 'throw'; }) || { value: '' }).value,
+      'Routes develop',
+      sep >= 2 ? tgt.pos + ' open!' : sep === 1 ? tgt.pos + ' a step open' : tgt.pos + ' covered',
+      'Throw to ' + tgt.pos + ' — ' + throwQ,
       caught ? 'Caught!' : intercepted ? 'Picked off!' : 'Incomplete',
       result.outcome === 'completion' ? 'Tackled after the catch' : '',
     ];
-
-    return { slotPath: slotPath, nbAt: nbAt, mlbAt: mlbAt, fsAt: fsAt, ballAt: ballAt,
-             captions: captions, caught: caught, intercepted: intercepted };
+    return { paths: paths, defAt: defAt, mlbAt: mlbAt, ballAt: ballAt, captions: captions, caught: caught, intercepted: intercepted };
   }
 
   async function playReveal(result) {
@@ -301,26 +301,26 @@
     setStage('animating');
     clearRoutes();
     ballEl.style.opacity = '1';
-
     for (let t = 0; t < 6; t++) {
-      placeChip('SLOT', sc.slotPath[t][0], sc.slotPath[t][1]);
-      placeChip('NB', sc.nbAt(t)[0], sc.nbAt(t)[1]);
+      ELIGIBLE.forEach(function (e) {
+        placeChip(e.chip, sc.paths[e.chip][t][0], sc.paths[e.chip][t][1]);
+        if (e.key !== 'rb') { const d = sc.defAt(e, t); placeChip(e.defChip, d[0], d[1]); }
+      });
       placeChip('MLB', sc.mlbAt(t)[0], sc.mlbAt(t)[1]);
-      placeChip('FS', sc.fsAt(t)[0], sc.fsAt(t)[1]);
       const b = sc.ballAt(t);
       placeBall(b[0], b[1]);
       if (t === 5 && !sc.caught && !sc.intercepted) ballEl.style.opacity = '0';
       if (sc.captions[t]) tickCaption.textContent = sc.captions[t];
-      await sleep(t === 0 ? 450 : 700);
+      await sleep(t === 0 ? 450 : 680);
     }
-    await sleep(450);
+    await sleep(420);
     showResult(result);
   }
 
   // ---------- result / breakdown ----------
   function showResult(result) {
     setStage('postplay');
-    advanceDown(result);   // update downs / field position / score; sets driveOver
+    advanceDown(result);
 
     const o = result.outcome;
     let cls = 'neutral', txt = '';
@@ -331,7 +331,6 @@
     resultLine.className = cls;
     resultLine.textContent = txt;
 
-    // drive-ending banner + Next-button label
     if (driveOver) {
       if (driveResult === 'td')         { driveBanner.className = 'td';       driveBanner.textContent = '🏈 TOUCHDOWN  +7'; }
       else if (driveResult === 'downs') { driveBanner.className = 'turnover'; driveBanner.textContent = 'Turnover on downs'; }
@@ -347,11 +346,9 @@
       const row = document.createElement('div');
       row.className = 'bd-row';
       row.innerHTML =
-        '<div class="bd-head">' +
-          '<span class="bd-dot ' + (step.status || 'neutral') + '"></span>' +
-          '<span class="bd-label">' + step.label + '</span>' +
-          '<span class="bd-value">' + (step.value || '') + '</span>' +
-        '</div>' +
+        '<div class="bd-head"><span class="bd-dot ' + (step.status || 'neutral') + '"></span>' +
+        '<span class="bd-label">' + step.label + '</span>' +
+        '<span class="bd-value">' + (step.value || '') + '</span></div>' +
         (step.detail ? '<div class="bd-detail">' + step.detail + '</div>' : '') +
         (step.math ? '<div class="bd-math">' + step.math + '</div>' : '');
       row.addEventListener('click', function () { row.classList.toggle('open'); });
@@ -362,22 +359,12 @@
   // ---------- drive + scoreboard ----------
   function advanceDown(result) {
     drivePlays += 1;
-    if (result.outcome === 'interception') {
-      driveOver = true; driveResult = 'int';
-      updateHud(); return;
-    }
-    const gain = Math.max(0, result.yards | 0);   // a resolved play here only gains or 0
+    if (result.outcome === 'interception') { driveOver = true; driveResult = 'int'; updateHud(); return; }
+    const gain = Math.max(0, result.yards | 0);
     ballOn += gain; distance -= gain;
-    if (ballOn >= 100) {                  // crossed the goal line
-      ballOn = 100; score += 7; tdCount += 1;
-      driveOver = true; driveResult = 'td';
-    } else if (distance <= 0) {           // moved the chains
-      down = 1;
-      distance = (100 - ballOn <= 10) ? (100 - ballOn) : 10;   // goal-to-go inside the 10
-    } else {
-      down += 1;
-      if (down > 4) { driveOver = true; driveResult = 'downs'; }   // turnover on downs
-    }
+    if (ballOn >= 100) { ballOn = 100; score += 7; tdCount += 1; driveOver = true; driveResult = 'td'; }
+    else if (distance <= 0) { down = 1; distance = (100 - ballOn <= 10) ? (100 - ballOn) : 10; }
+    else { down += 1; if (down > 4) { driveOver = true; driveResult = 'downs'; } }
     updateHud();
   }
 
@@ -392,14 +379,12 @@
   function updateHud() {
     const goalToGo = (ballOn + distance) >= 100;
     document.getElementById('hud-down').textContent =
-      (driveOver && driveResult === 'td') ? 'TD'
-        : ordinal(down) + ' & ' + (goalToGo ? 'Goal' : Math.max(1, distance));
+      (driveOver && driveResult === 'td') ? 'TD' : ordinal(down) + ' & ' + (goalToGo ? 'Goal' : Math.max(1, distance));
     document.getElementById('hud-spot').textContent = fieldPos(ballOn);
     document.getElementById('hud-score').textContent = score + '–' + cpuScore;
     document.getElementById('hud-drive').textContent = drivesPlayed + ' / ' + DRIVES_PER_GAME;
   }
 
-  // ---------- stage switching ----------
   function setStage(name) {
     Object.keys(panel).forEach(function (k) { panel[k].classList.toggle('hidden', k !== name); });
   }
@@ -411,12 +396,10 @@
     drivePlays = 0; driveOver = false; driveResult = null;
     newPlay();
   }
-
   function newGame() {
     score = 0; cpuScore = 0; tdCount = 0; drivesPlayed = 0; gameOver = false;
     startDrive();
   }
-
   function showCpuPossession() {
     const roll = Math.random();
     let pts, label;
@@ -426,12 +409,11 @@
     cpuScore += pts;
     const rl = document.getElementById('cpu-result');
     rl.textContent = pts > 0 ? (label + '  +' + pts) : label;
-    rl.className = pts === 7 ? 'bad' : pts === 3 ? 'neutral' : 'good';   // from your POV
+    rl.className = pts === 7 ? 'bad' : pts === 3 ? 'neutral' : 'good';
     document.getElementById('cpu-tally').textContent = 'You ' + score + ' · Opponent ' + cpuScore;
     updateHud();
     setStage('cpu');
   }
-
   function showGameOver() {
     gameOver = true;
     const isBest = score > bestScore;
@@ -450,12 +432,11 @@
   }
 
   function newPlay() {
-    // Defense calls its coverage (and a leverage if man), shown to the player.
     coverage = Math.random() < 0.4 ? 'zone' : 'man';
-    leverage = Math.random() < 0.5 ? 'outside' : 'inside';
-    chosenRoute = null;
+    ['cbX', 'cbZ', 'nb', 'ss', 'mlb'].forEach(function (k) { levMap[k] = Math.random() < 0.5 ? 'outside' : 'inside'; });
+    chosenPlay = null; chosenTarget = null;
     updateReadBanner();
-    document.querySelectorAll('.route-btn').forEach(function (b) { b.classList.remove('selected'); });
+    renderPlayPicker();
     snapBtn.disabled = true;
     hintBox.classList.add('hidden');
     hintBtn.setAttribute('aria-pressed', 'false');
@@ -463,81 +444,104 @@
     resetFormation();
     updateFieldLines();
     updateHud();
-    drawPreview();
+    clearRoutes();
     setStage('presnap');
   }
 
-  // First-down marker, plus a goal line and end-zone band when the goal is in
-  // view. All field-line positions are LOS-relative: LOS = 0, larger y = upfield.
   function updateFieldLines() {
     const goalToGo = (ballOn + distance) >= 100;
     const fl = fieldEl.querySelector('.fieldline.first');
     if (fl) {
-      const lineYd = goalToGo ? (100 - ballOn) : distance;
-      fl.style.top = toTop(lineYd) + '%';
+      fl.style.top = toTop(goalToGo ? (100 - ballOn) : distance) + '%';
       fl.classList.toggle('goal', goalToGo);
     }
-    const goalYd = 100 - ballOn;          // yards from the LOS to the goal line
+    const goalYd = 100 - ballOn;
     if (endzoneEl) {
-      if (goalYd <= FIELD.maxY) {
-        endzoneEl.style.display = 'block';
-        endzoneEl.style.height = toTop(goalYd) + '%';
-      } else {
-        endzoneEl.style.display = 'none';
-      }
+      if (goalYd <= FIELD.maxY) { endzoneEl.style.display = 'block'; endzoneEl.style.height = toTop(goalYd) + '%'; }
+      else endzoneEl.style.display = 'none';
     }
   }
 
   function updateReadBanner() {
-    if (coverage === 'man') {
-      readText.innerHTML = 'Defense: <b>MAN</b> — nickel shades <b>' + leverage + '</b>';
-    } else {
-      readText.innerHTML = 'Defense: <b>COVER 3</b> — zone shell, deep thirds';
-    }
+    readText.innerHTML = coverage === 'man'
+      ? 'Defense: <b>MAN</b> — read each matchup’s leverage'
+      : 'Defense: <b>COVER 3</b> — zone shell, deep thirds';
     readBanner.dataset.coverage = coverage;
-    readBanner.dataset.leverage = leverage;
   }
 
   function updateHint() {
-    if (coverage === 'man') {
-      const best = leverage === 'outside' ? 'Slant' : 'Out';
-      hintBox.innerHTML =
-        'It’s <b>man</b>. The nickel shades <b>' + leverage + '</b> — break <b>away</b> from his ' +
-        'leverage: the <b>' + best + '</b> attacks the side he can’t defend. The hitch is a safe ' +
-        'underneath answer.';
-    } else {
-      hintBox.innerHTML =
-        'It’s <b>Cover 3 zone</b>. The defenders bail to their deep thirds, so settle into the soft ' +
-        'spot underneath: the <b>Hitch</b> is the zone-beater. The slant works underneath; the ' +
-        '<b>Out</b> runs right into the curl-flat defender.';
-    }
+    hintBox.innerHTML = coverage === 'man'
+      ? 'It’s <b>man</b>. Target a receiver whose route breaks <b>away</b> from his defender’s leverage — ' +
+        'or a <b>drag</b>/<b>flat</b> that beats man underneath. Don’t throw a breaking route into the defender’s leverage.'
+      : 'It’s <b>Cover 3 zone</b>. Target a route that <b>sits in a soft spot</b> — a <b>hitch</b>, <b>curl</b>, or ' +
+        '<b>flat</b>. Avoid the <b>out</b> (the curl-flat defender drives on it).';
+  }
+
+  // ---------- play / target pickers ----------
+  function renderPlayPicker() {
+    playPickerEl.innerHTML = '';
+    PLAYS.forEach(function (pl) {
+      const b = document.createElement('button');
+      b.className = 'play-btn'; b.dataset.play = pl.id;
+      b.innerHTML = '<span class="play-name">' + pl.name + '</span><span class="play-tag">' + pl.tag + '</span>';
+      b.addEventListener('click', function () { selectPlay(pl); });
+      playPickerEl.appendChild(b);
+    });
+    targetPickerEl.innerHTML = '';
+    targetPickerEl.classList.add('hidden');
+    targetLabel.classList.add('hidden');
+  }
+
+  function selectPlay(pl) {
+    chosenPlay = pl; chosenTarget = null;
+    document.querySelectorAll('.play-btn').forEach(function (b) { b.classList.toggle('selected', b.dataset.play === pl.id); });
+    renderTargetPicker();
+    resetFormation();
+    drawPlayRoutes();
+    snapBtn.disabled = true;
+  }
+
+  function renderTargetPicker() {
+    targetPickerEl.innerHTML = '';
+    ELIGIBLE.forEach(function (e) {
+      const route = chosenPlay.routes[e.key];
+      const look = coverage === 'man' ? (e.key === 'rb' ? 'LB' : cap(levMap[e.defKey])) : 'Zone';
+      const b = document.createElement('button');
+      b.className = 'target-btn'; b.dataset.tkey = e.key;
+      b.innerHTML = '<span class="t-pos">' + e.pos + '</span><span class="t-route">' + cap(route) +
+                    '</span><span class="t-look">' + look + '</span>';
+      b.addEventListener('click', function () { selectTarget(e.key); });
+      targetPickerEl.appendChild(b);
+    });
+    targetPickerEl.classList.remove('hidden');
+    targetLabel.classList.remove('hidden');
+  }
+
+  function selectTarget(key) {
+    chosenTarget = key;
+    document.querySelectorAll('.target-btn').forEach(function (b) { b.classList.toggle('selected', b.dataset.tkey === key); });
+    ELIGIBLE.forEach(function (e) { chips[e.chip].classList.toggle('primary', e.key === key); });
+    drawPlayRoutes();
+    snapBtn.disabled = false;
   }
 
   // ---------- wiring ----------
-  document.querySelectorAll('.route-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      chosenRoute = btn.dataset.route;
-      document.querySelectorAll('.route-btn').forEach(function (b) { b.classList.remove('selected'); });
-      btn.classList.add('selected');
-      snapBtn.disabled = false;
-      drawPreview();
-    });
-  });
   hintBtn.addEventListener('click', function () {
     const on = hintBox.classList.toggle('hidden') === false;
     hintBtn.setAttribute('aria-pressed', String(on));
   });
   snapBtn.addEventListener('click', function () {
-    if (!chosenRoute) return;
+    if (!chosenPlay || !chosenTarget) return;
+    const e = elgByKey[chosenTarget];
     const result = Sim.resolvePlay({
-      route: chosenRoute, coverage: coverage, leverage: leverage,
-      receiver: P.slot, defender: P.nb, lb: P.mlb, qb: P.qb
+      route: chosenPlay.routes[chosenTarget], coverage: coverage, leverage: levMap[e.defKey],
+      receiver: P[e.key], defender: P[e.defKey], lb: P.mlb, qb: P.qb,
     });
     playReveal(result);
   });
   nextBtn.addEventListener('click', function () {
     if (!driveOver) { newPlay(); return; }
-    showCpuPossession();              // your drive ended — the opponent answers
+    showCpuPossession();
   });
   cpuContinueBtn.addEventListener('click', function () {
     if (drivesPlayed >= DRIVES_PER_GAME) showGameOver();

@@ -41,16 +41,20 @@
 
   // ---------- default demo roster ----------
   const DEFAULT_PLAYERS = {
-    slot: { name: 'C. Reed',  num: 11, pos: 'WR',
-            r: { SPD: 90, RTE: 88, CTH: 88, AWR: 85, BTK: 82, STA: 80 } },
-    qb:   { name: 'J. Vance', num: 9,  pos: 'QB',
-            r: { ACC: 90, DEC: 88, ARM: 85, MOB: 75, AWR: 88, STA: 85 } },
-    nb:   { name: 'M. Diallo', num: 27, pos: 'NB',
-            r: { SPD: 74, COV: 72, ZON: 72, BSU: 70, AWR: 72, TKL: 70, STA: 80 } },
-    mlb:  { name: 'F. Boone', num: 54, pos: 'MLB',
-            r: { COV: 80, ZON: 80, AWR: 82, TKL: 84, SPD: 80, BSU: 78, STA: 85 } },
-    fs:   { name: 'D. Park',  num: 31, pos: 'FS',
-            r: { SPD: 82, ZON: 80, BSU: 80, AWR: 82, TKL: 80, STA: 80 } },
+    // offense — eligible receivers + QB
+    x:    { name: 'D. Hart',  num: 80, pos: 'WR', r: { SPD: 89, RTE: 86, CTH: 86, AWR: 82, BTK: 80, STA: 80 } },
+    z:    { name: 'T. Ruiz',  num: 18, pos: 'WR', r: { SPD: 85, RTE: 79, CTH: 81, AWR: 77, BTK: 78, STA: 80 } },
+    slot: { name: 'C. Reed',  num: 11, pos: 'WR', r: { SPD: 90, RTE: 88, CTH: 88, AWR: 85, BTK: 82, STA: 80 } },
+    te:   { name: 'G. Olsen', num: 87, pos: 'TE', r: { SPD: 74, RTE: 76, CTH: 85, AWR: 80, BTK: 86, STA: 82 } },
+    rb:   { name: 'A. Kane',  num: 28, pos: 'RB', r: { SPD: 88, RTE: 70, CTH: 78, AWR: 74, BTK: 88, STA: 84 } },
+    qb:   { name: 'J. Vance', num: 9,  pos: 'QB', r: { ACC: 90, DEC: 88, ARM: 85, MOB: 75, AWR: 88, STA: 85 } },
+    // defense — man assignments: X↔cbX, Z↔cbZ, slot↔nb, TE↔ss, RB↔mlb; mlb is also the lane LB
+    cbX:  { name: 'R. Slade', num: 24, pos: 'CB', r: { SPD: 88, COV: 85, ZON: 78, BSU: 83, AWR: 80, TKL: 72, STA: 80 } },
+    cbZ:  { name: 'M. Pope',  num: 21, pos: 'CB', r: { SPD: 82, COV: 77, ZON: 74, BSU: 75, AWR: 74, TKL: 74, STA: 80 } },
+    nb:   { name: 'M. Diallo',num: 27, pos: 'NB', r: { SPD: 74, COV: 72, ZON: 72, BSU: 70, AWR: 72, TKL: 70, STA: 80 } },
+    ss:   { name: 'B. Cole',  num: 32, pos: 'SS', r: { SPD: 80, COV: 74, ZON: 80, BSU: 76, AWR: 82, TKL: 84, STA: 82 } },
+    mlb:  { name: 'F. Boone', num: 54, pos: 'MLB',r: { COV: 76, ZON: 80, AWR: 82, TKL: 84, SPD: 80, BSU: 74, STA: 85 } },
+    fs:   { name: 'D. Park',  num: 31, pos: 'FS', r: { SPD: 82, ZON: 80, BSU: 80, AWR: 82, TKL: 80, STA: 80 } },
   };
 
   // ---------- main resolver ----------

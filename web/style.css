@@ -175,6 +175,30 @@ html, body {
 .route-name { font-size: 15px; font-weight: 800; }
 .route-sub { font-size: 10px; color: var(--muted); }
 
+/* play + target pickers */
+#play-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.play-btn {
+  background: var(--panel-2); color: var(--ink); border: 1.5px solid #2a323e; border-radius: 10px;
+  padding: 11px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  transition: border-color .15s, background .15s, transform .08s;
+}
+.play-btn:active { transform: scale(0.98); }
+.play-btn.selected { border-color: var(--star); background: #232a36; }
+.play-name { font-size: 15px; font-weight: 800; }
+.play-tag { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+
+#target-picker { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.target-btn {
+  background: var(--panel-2); color: var(--ink); border: 1.5px solid #2a323e; border-radius: 9px;
+  padding: 8px 2px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  transition: border-color .15s, background .15s, transform .08s;
+}
+.target-btn:active { transform: scale(0.97); }
+.target-btn.selected { border-color: var(--star); background: #232a36; }
+.t-pos { font-size: 13px; font-weight: 800; }
+.t-route { font-size: 10px; color: #cdd7e3; }
+.t-look { font-size: 9px; color: var(--muted); }
+
 #snap-btn, #next-btn {
   margin-top: 4px;
   background: var(--los); color: #fff; border: none; border-radius: 12px;

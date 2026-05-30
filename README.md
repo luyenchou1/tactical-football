@@ -8,7 +8,7 @@ Turn-based tactical American football for mobile — think **XCOM-meets-football
 
 **▶ Play it live: https://luyenchou1.github.io/tactical-football/** — open it on your phone and **Add to Home Screen** to install it (works offline once installed).
 
-A game is **5 rounds**: each round you get a possession, then the opponent gets one. Read the defense (man or Cover 3 zone), call the route that beats it, and outscore them. Your best score is saved.
+A game is **5 rounds**: each round you get a possession, then the opponent gets one. Read the defense (man or Cover 3 zone), call a play, target the open receiver, and outscore them. Your best score is saved.
 
 Run it locally (static web app — no build step, no dependencies):
 
@@ -36,12 +36,12 @@ T0 snap → T1 stem → T2 separation + LB undercut → T3 throw quality
                                                 → T5 YAC
 ```
 
-The core "chess move" is pre-snap. The defense lines up in **man (Cover 1)** or **zone (Cover 3)**, and the right route depends on which:
+The core "chess move" is pre-snap. The defense lines up in **man (Cover 1)** or **zone (Cover 3)**; you call a **play** (which assigns all five eligible receivers a route) and pick **who to throw to**, reading each matchup:
 
-- **vs man** — read the nickel's leverage and break *away* from it (slant beats outside, out beats inside; the hitch is a safe answer).
-- **vs Cover 3 zone** — the defenders bail to their deep thirds, so the **hitch** settles into the soft spot; the out runs into the curl-flat defender.
+- **vs man** — target a receiver whose route breaks *away* from his defender's leverage (slant beats outside, out beats inside), or a drag/flat that beats man underneath.
+- **vs Cover 3 zone** — target a route that settles in a soft spot (hitch, curl, flat); the out runs into the curl-flat defender.
 
-Ratings (0–99) feed a roll-under d100 resolution, and every roll is surfaced in the post-play breakdown so the outcome is legible, not a black box.
+Routes (slant, hitch, out, drag, dig, curl, flat) and ratings (0–99) feed a roll-under d100 resolution, and every roll is surfaced in the post-play breakdown so the outcome is legible, not a black box.
 
 ## Calibration
 
@@ -71,9 +71,11 @@ python3 sim/validation/simulate.py rps      # route × coverage win-rate grid
 - [x] Game arc: multi-round games with a saved high score
 - [x] Second coverage (Cover 3 zone): the read flips — hitch beats zone, leverage beats man
 - [x] An opponent (abstracted CPU possessions) for a true win/lose result
+- [x] Playbook (4 plays, 7 routes) — pick a play and target any of 5 receivers
+- [ ] Post-snap reads — pick who comes open as the play develops
 - [ ] Disguised coverage — pre-snap tells and bluffs to read
 - [ ] Coach both sides — call defense on the opponent's possessions
-- [ ] More plays and routes
+- [ ] Deep shots (go / post / corner) with safety help in the model
 
 ## The Swift simulator
 
