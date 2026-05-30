@@ -36,7 +36,12 @@ T0 snap → T1 stem → T2 separation + LB undercut → T3 throw quality
                                                 → T5 YAC
 ```
 
-The core "chess move" is pre-snap: you read the slot CB's **leverage** (shading inside or outside) and pick the slot receiver's route. Break *away* from his leverage and you win separation; break *into* it and you're covered. Ratings (0–99) feed a roll-under d100 resolution, and every roll is surfaced in the post-play breakdown so the outcome is legible, not a black box.
+The core "chess move" is pre-snap. The defense lines up in **man (Cover 1)** or **zone (Cover 3)**, and the right route depends on which:
+
+- **vs man** — read the nickel's leverage and break *away* from it (slant beats outside, out beats inside; the hitch is a safe answer).
+- **vs Cover 3 zone** — the defenders bail to their deep thirds, so the **hitch** settles into the soft spot; the out runs into the curl-flat defender.
+
+Ratings (0–99) feed a roll-under d100 resolution, and every roll is surfaced in the post-play breakdown so the outcome is legible, not a black box.
 
 ## Calibration
 
@@ -53,7 +58,8 @@ The math is tuned so that rating spread maps to a believable completion-rate gra
 Monotonic on both axes; elite-vs-elite plays as a real contest, elite-vs-poor is a layup. Reproduce it:
 
 ```bash
-python3 sim/validation/simulate.py matrix
+python3 sim/validation/simulate.py matrix   # WR×CB tier sweep (slant vs man)
+python3 sim/validation/simulate.py rps      # route × coverage win-rate grid
 ```
 
 ## Roadmap
@@ -63,7 +69,7 @@ python3 sim/validation/simulate.py matrix
 - [x] Installable, offline-capable PWA (manifest + service worker)
 - [x] Drive + scoreboard loop: downs, first downs, goal-to-go, touchdowns, turnover on downs
 - [x] Game arc: 6-drive challenge with a final grade and a saved high score
-- [ ] Second coverage (Cover 2 / Cover 3) to deepen the pre-snap read
+- [x] Second coverage (Cover 3 zone): the read flips — hitch beats zone, leverage beats man
 - [ ] A simple opponent (CPU score) for a true win/lose result
 - [ ] More plays and routes
 

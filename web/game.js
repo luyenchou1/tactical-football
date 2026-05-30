@@ -80,13 +80,15 @@
   const newGameBtn = document.getElementById('new-game-btn');
   const hintBtn = document.getElementById('hint-btn');
   const hintBox = document.getElementById('hint-box');
-  const levWord = document.getElementById('lev-word');
+  const readText = document.getElementById('read-text');
+  const readBanner = document.getElementById('read-banner');
   const driveBanner = document.getElementById('drive-banner');
   const endzoneEl = document.getElementById('endzone');
 
   // ---------- game state ----------
   const chips = {};            // id -> element
   let leverage = 'outside';
+  let coverage = 'man';
   let chosenRoute = null;
   // Drive + scoreboard. ballOn = yards from our own goal (0..100); we drive toward 100.
   // A drive ends in a touchdown (+7), a turnover on downs, or an interception.
@@ -428,9 +430,11 @@
   }
 
   function newPlay() {
+    // Defense calls its coverage (and a leverage if man), shown to the player.
+    coverage = Math.random() < 0.4 ? 'zone' : 'man';
     leverage = Math.random() < 0.5 ? 'outside' : 'inside';
     chosenRoute = null;
-    levWord.textContent = leverage;
+    updateReadBanner();
     document.querySelectorAll('.route-btn').forEach(function (b) { b.classList.remove('selected'); });
     snapBtn.disabled = true;
     hintBox.classList.add('hidden');
@@ -464,12 +468,29 @@
     }
   }
 
+  function updateReadBanner() {
+    if (coverage === 'man') {
+      readText.innerHTML = 'Defense: <b>MAN</b> — nickel shades <b>' + leverage + '</b>';
+    } else {
+      readText.innerHTML = 'Defense: <b>COVER 3</b> — zone shell, deep thirds';
+    }
+    readBanner.dataset.coverage = coverage;
+    readBanner.dataset.leverage = leverage;
+  }
+
   function updateHint() {
-    const best = leverage === 'outside' ? 'Slant' : 'Out';
-    hintBox.innerHTML =
-      'The nickel is shading <b>' + leverage + '</b>. Break <b>away</b> from his leverage: ' +
-      'the <b>' + best + '</b> attacks the side he can’t defend. ' +
-      'The hitch is the safe answer but gives up the easy yards after the catch.';
+    if (coverage === 'man') {
+      const best = leverage === 'outside' ? 'Slant' : 'Out';
+      hintBox.innerHTML =
+        'It’s <b>man</b>. The nickel shades <b>' + leverage + '</b> — break <b>away</b> from his ' +
+        'leverage: the <b>' + best + '</b> attacks the side he can’t defend. The hitch is a safe ' +
+        'underneath answer.';
+    } else {
+      hintBox.innerHTML =
+        'It’s <b>Cover 3 zone</b>. The defenders bail to their deep thirds, so settle into the soft ' +
+        'spot underneath: the <b>Hitch</b> is the zone-beater. The slant works underneath; the ' +
+        '<b>Out</b> runs right into the curl-flat defender.';
+    }
   }
 
   // ---------- wiring ----------
@@ -488,7 +509,7 @@
   });
   snapBtn.addEventListener('click', function () {
     if (!chosenRoute) return;
-    const result = Sim.resolvePlay(chosenRoute, leverage);
+    const result = Sim.resolvePlay(chosenRoute, coverage, leverage);
     playReveal(result);
   });
   nextBtn.addEventListener('click', function () {
