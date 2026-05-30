@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Swift / SwiftPM build artifacts
+.build/
+.swiftpm/
+*.xcodeproj
+
+# Original handoff tarball (its contents are extracted and tracked)
+*.tar.gz
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.log
