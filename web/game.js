@@ -79,12 +79,19 @@
   const hintBtn = document.getElementById('hint-btn');
   const hintBox = document.getElementById('hint-box');
   const levWord = document.getElementById('lev-word');
+  const driveBanner = document.getElementById('drive-banner');
+  const endzoneEl = document.getElementById('endzone');
 
   // ---------- game state ----------
   const chips = {};            // id -> element
   let leverage = 'outside';
   let chosenRoute = null;
-  let down = 1, distance = 10, ballOn = -25, driveYards = 0;
+  // Drive + scoreboard. ballOn = yards from our own goal (0..100); we drive toward 100.
+  // A drive ends in a touchdown (+7), a turnover on downs, or an interception.
+  let down = 1, distance = 10, ballOn = 25;
+  let score = 0;
+  let drivePlays = 0, driveStartYard = 25;
+  let driveOver = false, driveResult = null;   // 'td' | 'downs' | 'int'
 
   // ---------- chip rendering ----------
   function buildChips() {
@@ -299,6 +306,8 @@
   // ---------- result / breakdown ----------
   function showResult(result) {
     setStage('postplay');
+    advanceDown(result);   // update downs / field position / score; sets driveOver
+
     const o = result.outcome;
     let cls = 'neutral', txt = '';
     if (o === 'completion') { cls = 'good'; txt = 'Completion +' + result.yards; }
@@ -307,6 +316,17 @@
     else { cls = 'neutral'; txt = 'Incomplete'; }
     resultLine.className = cls;
     resultLine.textContent = txt;
+
+    // drive-ending banner + Next-button label
+    if (driveOver) {
+      if (driveResult === 'td')         { driveBanner.className = 'td';       driveBanner.textContent = '🏈 TOUCHDOWN  +7'; }
+      else if (driveResult === 'downs') { driveBanner.className = 'turnover'; driveBanner.textContent = 'Turnover on downs'; }
+      else                              { driveBanner.className = 'turnover'; driveBanner.textContent = 'Intercepted — turnover'; }
+      nextBtn.textContent = 'Next drive ›';
+    } else {
+      driveBanner.className = 'hidden';
+      nextBtn.textContent = 'Next play ›';
+    }
 
     breakdownEl.innerHTML = '';
     result.chain.forEach(function (step) {
@@ -323,28 +343,47 @@
       row.addEventListener('click', function () { row.classList.toggle('open'); });
       breakdownEl.appendChild(row);
     });
-
-    advanceDown(result);
   }
 
-  // ---------- drive state ----------
+  // ---------- drive + scoreboard ----------
   function advanceDown(result) {
-    const gain = Math.max(-10, result.yards | 0);
+    drivePlays += 1;
     if (result.outcome === 'interception') {
-      // turnover — just reset the drive for the prototype
-      down = 1; distance = 10; ballOn = -25; driveYards = 0;
+      driveOver = true; driveResult = 'int';
+      updateHud(); return;
+    }
+    const gain = Math.max(0, result.yards | 0);   // a resolved play here only gains or 0
+    ballOn += gain; distance -= gain;
+    if (ballOn >= 100) {                  // crossed the goal line
+      ballOn = 100; score += 7;
+      driveOver = true; driveResult = 'td';
+    } else if (distance <= 0) {           // moved the chains
+      down = 1;
+      distance = (100 - ballOn <= 10) ? (100 - ballOn) : 10;   // goal-to-go inside the 10
     } else {
-      ballOn += gain; driveYards += gain; distance -= gain;
-      if (distance <= 0) { down = 1; distance = 10; }       // first down
-      else { down += 1; if (down > 4) { down = 1; distance = 10; ballOn = -25; driveYards = 0; } }
+      down += 1;
+      if (down > 4) { driveOver = true; driveResult = 'downs'; }   // turnover on downs
     }
     updateHud();
   }
+
+  function ordinal(d) { return ['', '1st', '2nd', '3rd', '4th'][d] || '4th'; }
+  function fieldPos(y) {
+    y = Math.round(y);
+    if (y >= 100) return 'GOAL';
+    if (y <= 0) return 'OWN 0';
+    if (y === 50) return '50';
+    return (y < 50 ? 'OWN ' + y : 'OPP ' + (100 - y));
+  }
   function updateHud() {
-    const ord = ['', '1st', '2nd', '3rd', '4th'][down] || '1st';
-    document.getElementById('hud-down').textContent = ord + ' & ' + Math.max(1, distance);
-    document.getElementById('hud-spot').textContent = (ballOn >= 0 ? '+' : '') + ballOn;
-    document.getElementById('hud-drive').textContent = driveYards + ' yds';
+    const goalToGo = (ballOn + distance) >= 100;
+    document.getElementById('hud-down').textContent =
+      (driveOver && driveResult === 'td') ? 'TD'
+        : ordinal(down) + ' & ' + (goalToGo ? 'Goal' : Math.max(1, distance));
+    document.getElementById('hud-spot').textContent = fieldPos(ballOn);
+    document.getElementById('hud-score').textContent = score;
+    document.getElementById('hud-drive').textContent =
+      Math.max(0, Math.round(ballOn - driveStartYard)) + ' yds';
   }
 
   // ---------- stage switching ----------
@@ -352,7 +391,13 @@
     Object.keys(panel).forEach(function (k) { panel[k].classList.toggle('hidden', k !== name); });
   }
 
-  // ---------- new play ----------
+  // ---------- new drive / new play ----------
+  function startDrive() {
+    ballOn = 25; down = 1; distance = 10; driveStartYard = 25;
+    drivePlays = 0; driveOver = false; driveResult = null;
+    newPlay();
+  }
+
   function newPlay() {
     leverage = Math.random() < 0.5 ? 'outside' : 'inside';
     chosenRoute = null;
@@ -363,11 +408,31 @@
     hintBtn.setAttribute('aria-pressed', 'false');
     updateHint();
     resetFormation();
-    // reposition first-down line for current distance
-    const fl = fieldEl.querySelector('.fieldline.first');
-    if (fl) fl.style.top = toTop(distance) + '%';
+    updateFieldLines();
+    updateHud();
     drawPreview();
     setStage('presnap');
+  }
+
+  // First-down marker, plus a goal line and end-zone band when the goal is in
+  // view. All field-line positions are LOS-relative: LOS = 0, larger y = upfield.
+  function updateFieldLines() {
+    const goalToGo = (ballOn + distance) >= 100;
+    const fl = fieldEl.querySelector('.fieldline.first');
+    if (fl) {
+      const lineYd = goalToGo ? (100 - ballOn) : distance;
+      fl.style.top = toTop(lineYd) + '%';
+      fl.classList.toggle('goal', goalToGo);
+    }
+    const goalYd = 100 - ballOn;          // yards from the LOS to the goal line
+    if (endzoneEl) {
+      if (goalYd <= FIELD.maxY) {
+        endzoneEl.style.display = 'block';
+        endzoneEl.style.height = toTop(goalYd) + '%';
+      } else {
+        endzoneEl.style.display = 'none';
+      }
+    }
   }
 
   function updateHint() {
@@ -397,10 +462,11 @@
     const result = Sim.resolvePlay(chosenRoute, leverage);
     playReveal(result);
   });
-  nextBtn.addEventListener('click', newPlay);
+  nextBtn.addEventListener('click', function () {
+    if (driveOver) startDrive(); else newPlay();
+  });
 
   // ---------- boot ----------
   buildChips();
-  updateHud();
-  newPlay();
+  startDrive();
 })();

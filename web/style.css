@@ -194,6 +194,19 @@ html, body {
 #result-line.bad { color: var(--bad); }
 #result-line.neutral { color: var(--neutral); }
 
+/* drive-ending banner */
+#drive-banner { text-align: center; font-weight: 800; font-size: 14px; letter-spacing: 0.04em; padding: 9px 12px; border-radius: 8px; }
+#drive-banner.td { background: rgba(70,196,106,0.16); color: var(--good); border: 1px solid rgba(70,196,106,0.45); }
+#drive-banner.turnover { background: rgba(232,84,62,0.14); color: var(--bad); border: 1px solid rgba(232,84,62,0.45); }
+
+/* end-zone band + goal line (shown only when the goal is within the field view) */
+#endzone {
+  position: absolute; left: 0; right: 0; top: 0; display: none;
+  background: repeating-linear-gradient(45deg, rgba(46,123,214,0.22) 0 9px, rgba(46,123,214,0.10) 9px 18px);
+  border-bottom: 3px solid #fff; z-index: 0; pointer-events: none;
+}
+.fieldline.first.goal { background: #fff; height: 3px; }
+
 #breakdown { display: flex; flex-direction: column; gap: 1px; background: #222a35; border-radius: 8px; overflow: hidden; }
 .bd-row { background: var(--panel-2); padding: 10px 12px; cursor: pointer; }
 .bd-head { display: flex; align-items: center; gap: 8px; }

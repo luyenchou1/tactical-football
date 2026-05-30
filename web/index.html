@@ -19,6 +19,7 @@
 
     <!-- HUD -->
     <header id="hud">
+      <div class="hud-cell"><span class="hud-label">SCORE</span><span id="hud-score">0</span></div>
       <div class="hud-cell"><span class="hud-label">DOWN</span><span id="hud-down">1st &amp; 10</span></div>
       <div class="hud-cell"><span class="hud-label">BALL ON</span><span id="hud-spot">−25</span></div>
       <div class="hud-cell"><span class="hud-label">DRIVE</span><span id="hud-drive">0 yds</span></div>
@@ -27,6 +28,7 @@
     <!-- Field -->
     <div id="field-wrap">
       <div id="field">
+        <div id="endzone"></div>
         <svg id="routes" viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <marker id="arrow" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
@@ -80,6 +82,7 @@
       <!-- POST-PLAY -->
       <div id="postplay" class="panel-stage hidden">
         <div id="result-line">Completion +8</div>
+        <div id="drive-banner" class="hidden"></div>
         <div id="breakdown"></div>
         <button id="next-btn">Next play ›</button>
       </div>

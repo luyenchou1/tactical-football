@@ -56,9 +56,10 @@ python3 sim/validation/simulate.py matrix
 
 - [x] One play fully resolved (Quick Slant vs Cover 1 Man), validated math
 - [x] Playable web prototype: pre-snap read, animated tick reveal, post-play breakdown
-- [ ] Installable, offline-capable PWA
+- [x] Installable, offline-capable PWA (manifest + service worker)
+- [x] Drive + scoreboard loop: downs, first downs, goal-to-go, touchdowns, turnover on downs
 - [ ] Second coverage (Cover 2 / Cover 3) to deepen the pre-snap read
-- [ ] Drive + scoreboard loop with a win condition
+- [ ] Win condition (quarters or a target score) and a simple opponent
 - [ ] More plays and routes
 
 ## The Swift simulator
