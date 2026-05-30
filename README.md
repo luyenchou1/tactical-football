@@ -8,7 +8,7 @@ Turn-based tactical American football for mobile — think **XCOM-meets-football
 
 **▶ Play it live: https://luyenchou1.github.io/tactical-football/** — open it on your phone and **Add to Home Screen** to install it (works offline once installed).
 
-A game is a **6-drive challenge**: read the defense, call the route, and score as many touchdowns as you can. You get a letter grade and a saved high score at the end.
+A game is **5 rounds**: each round you get a possession, then the opponent gets one. Read the defense (man or Cover 3 zone), call the route that beats it, and outscore them. Your best score is saved.
 
 Run it locally (static web app — no build step, no dependencies):
 
@@ -68,9 +68,11 @@ python3 sim/validation/simulate.py rps      # route × coverage win-rate grid
 - [x] Playable web prototype: pre-snap read, animated tick reveal, post-play breakdown
 - [x] Installable, offline-capable PWA (manifest + service worker)
 - [x] Drive + scoreboard loop: downs, first downs, goal-to-go, touchdowns, turnover on downs
-- [x] Game arc: 6-drive challenge with a final grade and a saved high score
+- [x] Game arc: multi-round games with a saved high score
 - [x] Second coverage (Cover 3 zone): the read flips — hitch beats zone, leverage beats man
-- [ ] A simple opponent (CPU score) for a true win/lose result
+- [x] An opponent (abstracted CPU possessions) for a true win/lose result
+- [ ] Disguised coverage — pre-snap tells and bluffs to read
+- [ ] Coach both sides — call defense on the opponent's possessions
 - [ ] More plays and routes
 
 ## The Swift simulator

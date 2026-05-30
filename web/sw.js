@@ -1,6 +1,6 @@
 // Tactical Football — service worker. Caches the app shell so the game
 // loads instantly and works fully offline once installed.
-const CACHE = 'tf-v5';
+const CACHE = 'tf-v6';
 const ASSETS = [
   './',
   'index.html',

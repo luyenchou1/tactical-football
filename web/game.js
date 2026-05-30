@@ -70,6 +70,7 @@
     presnap: document.getElementById('presnap'),
     animating: document.getElementById('animating'),
     postplay: document.getElementById('postplay'),
+    cpu: document.getElementById('cpu'),
     gameover: document.getElementById('gameover'),
   };
   const tickCaption = document.getElementById('tick-caption');
@@ -78,6 +79,7 @@
   const snapBtn = document.getElementById('snap-btn');
   const nextBtn = document.getElementById('next-btn');
   const newGameBtn = document.getElementById('new-game-btn');
+  const cpuContinueBtn = document.getElementById('cpu-continue');
   const hintBtn = document.getElementById('hint-btn');
   const hintBox = document.getElementById('hint-box');
   const readText = document.getElementById('read-text');
@@ -97,9 +99,11 @@
   let drivePlays = 0, driveStartYard = 25;
   let driveOver = false, driveResult = null;   // 'td' | 'downs' | 'int'
 
-  // Game arc: a game is a fixed number of possessions; score as much as you can.
-  const DRIVES_PER_GAME = 6;
+  // Game arc: each game is DRIVES_PER_GAME rounds. In a round you get a
+  // possession, then the opponent gets one (abstracted). Outscore them.
+  const DRIVES_PER_GAME = 5;
   let drivesPlayed = 0, tdCount = 0, gameOver = false;
+  let cpuScore = 0;
   let bestScore = Number(localStorage.getItem('tf-best') || 0);
   const fastMode = /[?&]fast\b/.test(location.search);   // ?fast skips the reveal delays
 
@@ -391,7 +395,7 @@
       (driveOver && driveResult === 'td') ? 'TD'
         : ordinal(down) + ' & ' + (goalToGo ? 'Goal' : Math.max(1, distance));
     document.getElementById('hud-spot').textContent = fieldPos(ballOn);
-    document.getElementById('hud-score').textContent = score;
+    document.getElementById('hud-score').textContent = score + '–' + cpuScore;
     document.getElementById('hud-drive').textContent = drivesPlayed + ' / ' + DRIVES_PER_GAME;
   }
 
@@ -409,22 +413,38 @@
   }
 
   function newGame() {
-    score = 0; tdCount = 0; drivesPlayed = 0; gameOver = false;
+    score = 0; cpuScore = 0; tdCount = 0; drivesPlayed = 0; gameOver = false;
     startDrive();
+  }
+
+  function showCpuPossession() {
+    const roll = Math.random();
+    let pts, label;
+    if (roll < 0.42)      { pts = 7; label = 'Touchdown'; }
+    else if (roll < 0.68) { pts = 3; label = 'Field goal'; }
+    else                  { pts = 0; label = 'Defense holds — punt'; }
+    cpuScore += pts;
+    const rl = document.getElementById('cpu-result');
+    rl.textContent = pts > 0 ? (label + '  +' + pts) : label;
+    rl.className = pts === 7 ? 'bad' : pts === 3 ? 'neutral' : 'good';   // from your POV
+    document.getElementById('cpu-tally').textContent = 'You ' + score + ' · Opponent ' + cpuScore;
+    updateHud();
+    setStage('cpu');
   }
 
   function showGameOver() {
     gameOver = true;
     const isBest = score > bestScore;
     if (isBest) { bestScore = score; try { localStorage.setItem('tf-best', String(score)); } catch (e) {} }
-    const grade = score >= 35 ? 'A+' : score >= 28 ? 'A' : score >= 21 ? 'B'
-                : score >= 14 ? 'C' : score >= 7 ? 'D' : 'F';
-    document.getElementById('go-score').textContent = score;
-    document.getElementById('go-grade').textContent = grade;
+    const result = score > cpuScore ? 'WIN' : score < cpuScore ? 'LOSS' : 'TIE';
+    document.getElementById('go-score').textContent = score + '–' + cpuScore;
+    const g = document.getElementById('go-grade');
+    g.textContent = result;
+    g.className = result === 'WIN' ? 'win' : result === 'LOSS' ? 'loss' : 'tie';
     document.getElementById('go-sub').textContent =
-      tdCount + (tdCount === 1 ? ' touchdown' : ' touchdowns') + ' in ' + DRIVES_PER_GAME + ' drives';
+      'You vs Opponent · ' + tdCount + (tdCount === 1 ? ' TD' : ' TDs') + ' in ' + DRIVES_PER_GAME + ' drives';
     const best = document.getElementById('go-best');
-    best.textContent = isBest ? ('New best!  ' + score) : ('Best  ' + bestScore);
+    best.textContent = isBest ? ('New best!  ' + score + ' pts') : ('Best  ' + bestScore + ' pts');
     best.className = isBest ? 'go-best new' : 'go-best';
     setStage('gameover');
   }
@@ -514,6 +534,9 @@
   });
   nextBtn.addEventListener('click', function () {
     if (!driveOver) { newPlay(); return; }
+    showCpuPossession();              // your drive ended — the opponent answers
+  });
+  cpuContinueBtn.addEventListener('click', function () {
     if (drivesPlayed >= DRIVES_PER_GAME) showGameOver();
     else startDrive();
   });

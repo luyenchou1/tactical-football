@@ -234,6 +234,24 @@ html, body {
   cursor: pointer; transition: transform .08s;
 }
 #new-game-btn:active { transform: scale(0.98); }
+#go-grade.win { color: var(--good); }
+#go-grade.loss { color: var(--bad); }
+#go-grade.tie { color: var(--star); }
+
+/* ---------- opponent possession ---------- */
+#cpu { align-items: center; text-align: center; gap: 8px; padding: 26px 0 6px; }
+#cpu-title { font-size: 12px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
+#cpu-result { font-size: 30px; font-weight: 900; line-height: 1.1; }
+#cpu-result.good { color: var(--good); }
+#cpu-result.neutral { color: var(--neutral); }
+#cpu-result.bad { color: var(--bad); }
+#cpu-tally { font-size: 14px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+#cpu-continue {
+  margin-top: 14px; width: 100%; background: var(--los); color: #fff; border: none;
+  border-radius: 12px; padding: 16px; font-size: 17px; font-weight: 800; letter-spacing: 0.06em;
+  cursor: pointer; transition: transform .08s;
+}
+#cpu-continue:active { transform: scale(0.98); }
 
 /* ---------- player card popover ---------- */
 #card-layer {
