@@ -54,7 +54,7 @@
   function readStatus(route, coverage, leverage) {
     const rt = ROUTES[route] || ROUTES.slant;
     if (coverage === 'zone') return rt.zoneSep > 10 ? 'good' : rt.zoneSep >= 0 ? 'neutral' : 'bad';
-    if (coverage === 'blitz') return rt.tt <= 1.6 ? 'good' : rt.tt <= 2.1 ? 'neutral' : 'bad';   // vs blitz: throw quick
+    if (coverage === 'blitz') return rt.tt <= 1.6 ? 'good' : 'neutral';   // quick = safe; deeper = a viable high-EV shot (never auto-'bad' vs a vacated zone)
     const levB = levTerm(rt.brk, leverage);
     return levB > 0 ? 'good' : levB < 0 ? 'bad' : (rt.manBase >= 8 ? 'good' : 'neutral');
   }
@@ -164,7 +164,7 @@
         detail: 'The rush gets home before the ' + route + ' (' + rt.tt + 's) develops',
         math: 'sack ' + sackP + '%; rolled ' + pRoll,
       });
-      return finish('sack', -(4 + trunc(d100() / 20)), chain, meta);   // −4..−8
+      return finish('sack', -(4 + trunc(d100() / 20)), chain, meta);   // −4..−9
     } else if (pRoll <= sackP + hurryP) {
       hurried = true; meta.hurried = true;
       chain.push({

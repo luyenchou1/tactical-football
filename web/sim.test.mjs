@@ -35,6 +35,14 @@ function cmpPct(opts, N) {
     return (c / N) * 100;
   } finally { Math.random = orig; }
 }
+function ratePct(opts, outcome, N) {
+  const orig = Math.random; Math.random = mulberry32(0x1a2b3c4d);
+  try {
+    let c = 0;
+    for (let i = 0; i < N; i++) if (Sim.resolvePlay(opts).outcome === outcome) c++;
+    return (c / N) * 100;
+  } finally { Math.random = orig; }
+}
 const BASE = { receiver: P.slot, defender: P.nb, lb: P.mlb, qb: P.qb };
 
 test('invariants: every route × coverage × leverage is well-formed', () => {
@@ -54,9 +62,9 @@ test('invariants: every route × coverage × leverage is well-formed', () => {
 });
 
 // Calibration band — Python target for default slot WR vs avg nickel is ~80%.
-test('calibration: default slant vs man/outside stays in band [74, 88]', () => {
+test('calibration: default slant vs man/outside stays in band [76, 84]', () => {
   const pct = cmpPct({ ...BASE, route: 'slant', coverage: 'man', leverage: 'outside' }, 6000);
-  assert.ok(pct >= 74 && pct <= 88, `slant/man/outside ${pct.toFixed(1)}% out of band [74, 88]`);
+  assert.ok(pct >= 76 && pct <= 84, `slant/man/outside ${pct.toFixed(1)}% out of band [76, 84]`);
 });
 
 // The read must matter: beating leverage should clearly beat throwing into it.
@@ -64,4 +72,21 @@ test('calibration: leverage swing is real (beat − into ≥ 8 pts)', () => {
   const beat = cmpPct({ ...BASE, route: 'slant', coverage: 'man', leverage: 'outside' }, 6000);
   const into = cmpPct({ ...BASE, route: 'slant', coverage: 'man', leverage: 'inside' }, 6000);
   assert.ok(beat - into >= 8, `leverage swing only ${(beat - into).toFixed(1)}pp (beat ${beat.toFixed(1)} / into ${into.toFixed(1)})`);
+});
+
+// Guards the risk axis (pass rush + forced-read INT). Without these, the whole
+// just-shipped feature could be reverted with completion% unchanged and tests green.
+test('risk axis: pass-rush sacks and forced-read INTs stay calibrated', () => {
+  const N = 6000;
+  const digBlitzSack = ratePct({ ...BASE, route: 'dig', coverage: 'blitz', leverage: 'outside' }, 'sack', N);
+  const slantBlitzSack = ratePct({ ...BASE, route: 'slant', coverage: 'blitz', leverage: 'outside' }, 'sack', N);
+  const digIntoInt = ratePct({ ...BASE, route: 'dig', coverage: 'man', leverage: 'inside' }, 'interception', N);
+  const slantBeatInt = ratePct({ ...BASE, route: 'slant', coverage: 'man', leverage: 'outside' }, 'interception', N);
+  assert.ok(digBlitzSack >= 14 && digBlitzSack <= 24, `dig/blitz sack ${digBlitzSack.toFixed(1)}% out of [14, 24]`);
+  assert.ok(slantBlitzSack >= 4 && slantBlitzSack <= 12, `slant/blitz sack ${slantBlitzSack.toFixed(1)}% out of [4, 12]`);
+  assert.ok(digIntoInt >= 0.8 && digIntoInt <= 2.6, `dig/man/inside INT ${digIntoInt.toFixed(2)}% out of [0.8, 2.6]`);
+  assert.ok(slantBeatInt <= 0.9, `slant/man/outside INT ${slantBeatInt.toFixed(2)}% should be <= 0.9`);
+  // direction (seed-robust): depth is sacked more vs blitz; forcing into coverage is picked more
+  assert.ok(digBlitzSack > slantBlitzSack + 5, 'deep routes must be sacked more than quick vs blitz');
+  assert.ok(digIntoInt > slantBeatInt, 'forcing a deep route into coverage must be picked more than a good read');
 });

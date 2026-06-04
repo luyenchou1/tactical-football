@@ -207,7 +207,7 @@
       if (isTgt) {
         const lev = coverage === 'zone' ? null : levMap[e.defKey];
         const q = Sim.readStatus(chosenPlay.routes[e.key], coverage, lev);
-        color = q === 'good' ? '#46c46a' : q === 'bad' ? '#e8543e' : '#ffcf33';
+        color = q === 'good' ? '#46c46a' : q === 'bad' ? '#e8543e' : '#f2c200';
       }
       drawPolyline(pts, color, !isTgt);
     });
@@ -385,7 +385,8 @@
     drivePlays += 1;
     if (result.outcome === 'interception') { driveOver = true; driveResult = 'int'; updateHud(); return; }
     const gain = result.yards | 0;                 // negative on a sack
-    ballOn = Math.max(1, ballOn + gain); distance -= gain;
+    const nb = Math.max(1, ballOn + gain);         // clamp at our own goal line
+    distance -= (nb - ballOn); ballOn = nb;        // distance moves by the ACTUAL change, not the clamped-away nominal
     if (ballOn >= 100) { ballOn = 100; score += 7; tdCount += 1; driveOver = true; driveResult = 'td'; }
     else if (gain > 0 && distance <= 0) { down = 1; distance = (100 - ballOn <= 10) ? (100 - ballOn) : 10; }
     else { down += 1; if (down > 4) { driveOver = true; driveResult = 'downs'; } }
@@ -505,8 +506,8 @@
       : coverage === 'zone'
         ? 'It’s <b>Cover 3 zone</b>. Target a route that <b>sits in a soft spot</b> — a <b>hitch</b>, <b>curl</b>, or ' +
           '<b>flat</b>. Avoid the <b>out</b> (the curl-flat defender drives on it).'
-        : 'It’s a <b>blitz</b>. An underneath defender is rushing — a quick throw is open, but a slow-developing route ' +
-          '(<b>dig</b>, <b>curl</b>) gets you <b>sacked</b>. Hit a quick route (<b>slant</b>, <b>drag</b>, <b>flat</b>) now.';
+        : 'It’s a <b>blitz</b>. A defender vacates underneath, so a <b>quick</b> throw (slant, drag, flat) is open and ' +
+          'safe — or take a <b>deeper shot</b> (dig, curl) for more yards if you’ll risk the sack.';
   }
 
   // ---------- play / target pickers ----------
