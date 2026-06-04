@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "description": "Tactical Football — web game. Test harness for the pure matchup engine (sim.js).",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "balance": "node drivesim.mjs"
   }
 }
