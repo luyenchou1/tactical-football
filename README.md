@@ -1,14 +1,14 @@
 # Tactical Football
 
-Turn-based tactical American football for mobile — think **XCOM-meets-football**. You read the defense, pick your move, and watch a single play resolve through a chain of rating-driven dice rolls: snap → separation → throw → catch → yards after catch.
+Turn-based tactical American football for mobile — think **XCOM-meets-football**. You read the defense (man, Cover 3 zone, or blitz), call a play, choose who to throw to, and watch it resolve through a chain of rating-driven dice rolls — with a pass rush pricing every decision.
 
-> **Status:** early prototype. One play (the Quick Slant family vs Cover 1 Man) is fully playable in the browser. The matchup math is validated and calibrated against rough NFL priors.
+> **Status:** playable. A 4-play book over 7 routes, 3 defensive looks, a pass rush + sacks, interceptions on forced reads, and a 5-round game vs a CPU opponent. The matchup math runs in two engines (JS + a Python mirror) kept in sync and guarded by a test suite.
 
 ## Play it
 
 **▶ Play it live: https://luyenchou1.github.io/tactical-football/** — open it on your phone and **Add to Home Screen** to install it (works offline once installed).
 
-A game is **5 rounds**: each round you get a possession, then the opponent gets one. Read the defense (man or Cover 3 zone), call a play, target the open receiver, and outscore them. Your best score is saved.
+A game is **5 rounds**: each round you get a possession, then the opponent gets one. Read the defense (**man**, **Cover 3 zone**, or **blitz**), call a play, target the open receiver, and outscore them — but beware the pass rush: hold a deep route too long and you're sacked. Your best score is saved.
 
 Run it locally (static web app — no build step, no dependencies):
 
@@ -31,17 +31,17 @@ Every roll is shown in the post-play breakdown — tap a row to see the math beh
 ## How a play resolves
 
 ```
-T0 snap → T1 stem → T2 separation + LB undercut → T3 throw quality
-                                                → T4 catch / PBU / INT
-                                                → T5 YAC
+snap → separation (route vs coverage) → pass rush (sack / hurry / clean)
+     → throw quality → catch / PBU / INT → yards after catch
 ```
 
-The core "chess move" is pre-snap. The defense lines up in **man (Cover 1)** or **zone (Cover 3)**; you call a **play** (which assigns all five eligible receivers a route) and pick **who to throw to**, reading each matchup:
+The "chess move" is pre-snap. The defense shows **man (Cover 1)**, **Cover 3 zone**, or a **blitz**; you call a **play** (which assigns all five eligible receivers a route) and pick **who to throw to**, reading each matchup:
 
-- **vs man** — target a receiver whose route breaks *away* from his defender's leverage (slant beats outside, out beats inside), or a drag/flat that beats man underneath.
+- **vs man** — target a route that breaks *away* from its defender's leverage (slant beats outside, out beats inside), or a drag/flat that beats man underneath. Force a route *into* leverage and it can be picked.
 - **vs Cover 3 zone** — target a route that settles in a soft spot (hitch, curl, flat); the out runs into the curl-flat defender.
+- **vs a blitz** — a defender vacates, so a **quick** throw is wide open and safe — or take a **deeper shot** for more yards if you'll risk the sack.
 
-Routes (slant, hitch, out, drag, dig, curl, flat) and ratings (0–99) feed a roll-under d100 resolution, and every roll is surfaced in the post-play breakdown so the outcome is legible, not a black box.
+Every route has a time-to-throw, so depth costs time: holding the deep **dig** lets the rush home (~8% sack in base coverage, ~19% vs a blitz) while a quick slant is ~1%. The target buttons and the chosen route are colored green/amber/red by the read, and every roll is surfaced in the post-play breakdown — legible, not a black box.
 
 ## Calibration
 
@@ -55,11 +55,17 @@ The math is tuned so that rating spread maps to a believable completion-rate gra
 | **below**   | 48% | 52% | 57% | 63% | 68% |
 | **poor**    | 35% | 42% | 44% | 55% | 56% |
 
-Monotonic on both axes; elite-vs-elite plays as a real contest, elite-vs-poor is a layup. Reproduce it:
+Monotonic on both axes; elite-vs-elite plays as a real contest, elite-vs-poor is a layup.
+
+**Risk & balance** (measured, not asserted): a deep dig carries ~8% sack risk in base coverage (~19% vs a blitz) vs ~1% on a quick slant; forcing a route into coverage is intercepted ~1.5% vs ~0.4% on a good read. At the game level a random play-masher wins ~51%, reading the coverage wins ~65%, and always bombing deep wins ~50% — the read matters and nothing dominates.
+
+Reproduce / verify:
 
 ```bash
+python3 sim/validation/simulate.py rps      # route × coverage grid (cmp / INT / sack / EV)
 python3 sim/validation/simulate.py matrix   # WR×CB tier sweep (slant vs man)
-python3 sim/validation/simulate.py rps      # route × coverage win-rate grid
+cd web && npm test                          # engine invariants + calibration & risk snapshots
+cd web && npm run balance                   # drive-level win-rate per strategy
 ```
 
 ## Roadmap
@@ -72,6 +78,9 @@ python3 sim/validation/simulate.py rps      # route × coverage win-rate grid
 - [x] Second coverage (Cover 3 zone): the read flips — hitch beats zone, leverage beats man
 - [x] An opponent (abstracted CPU possessions) for a true win/lose result
 - [x] Playbook (4 plays, 7 routes) — pick a play and target any of 5 receivers
+- [x] Risk/reward: pass rush + pocket clock (sacks), the blitz, and INTs on forced reads
+- [x] Tuned opponent, a zero-dep Node test harness, and a drive-level balance sim
+- [x] Read legibility (colored verdicts) + outcome juice (pop + haptics)
 - [ ] Post-snap reads — pick who comes open as the play develops
 - [ ] Disguised coverage — pre-snap tells and bluffs to read
 - [ ] Coach both sides — call defense on the opponent's possessions
