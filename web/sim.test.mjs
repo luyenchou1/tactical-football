@@ -16,7 +16,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const Sim = require('./sim.js');                 // sim.js exports a CommonJS module
 const P = Sim.DEFAULT_PLAYERS;
-const OUTCOMES = ['completion', 'incomplete', 'pbu', 'interception'];
+const OUTCOMES = ['completion', 'incomplete', 'pbu', 'interception', 'sack'];
 
 // deterministic RNG so seeded snapshots are stable across runs
 function mulberry32(a) {
@@ -39,13 +39,13 @@ const BASE = { receiver: P.slot, defender: P.nb, lb: P.mlb, qb: P.qb };
 
 test('invariants: every route × coverage × leverage is well-formed', () => {
   for (const route of Object.keys(Sim.ROUTES))
-    for (const coverage of ['man', 'zone'])
+    for (const coverage of ['man', 'zone', 'blitz'])
       for (const leverage of ['inside', 'outside'])
         for (let i = 0; i < 150; i++) {
           const r = Sim.resolvePlay({ route, coverage, leverage, receiver: P.slot, defender: P.nb, lb: P.mlb, qb: P.qb });
           assert.ok(OUTCOMES.includes(r.outcome), `bad outcome "${r.outcome}" for ${route}/${coverage}/${leverage}`);
           if (r.outcome === 'completion') assert.ok(r.yards >= 0, 'completion yards >= 0');
-          else if (r.outcome === 'interception') assert.ok(r.yards <= 0, 'interception yards <= 0');
+          else if (r.outcome === 'interception' || r.outcome === 'sack') assert.ok(r.yards <= 0, `${r.outcome} yards <= 0`);
           else assert.equal(r.yards, 0, `${r.outcome} yards must be 0`);
           const keys = r.chain.map((s) => s.key);
           assert.equal(new Set(keys).size, keys.length, `chain keys must be unique: ${keys.join(',')}`);

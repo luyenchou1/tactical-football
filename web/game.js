@@ -266,6 +266,8 @@
     // Who actually plays the ball: the MLB when it jumps the lane (or covers the RB underneath),
     // otherwise the target's own man defender. Drives the INT/PBU ball path + MLB converge.
     const mlbIsContester = inLane || (chosenTarget === 'rb' && sep === 0);
+    const sacked = meta.sacked;
+    function qbAt(t) { return t < 3 ? [26.6, -5] : [26.6, -5 - (t - 2) * 0.7]; }   // driven back when sacked
 
     function defAt(e, t) {
       const rp = paths[e.chip][t];
@@ -282,21 +284,24 @@
     }
     function ballAt(t) {
       if (t <= 2) return [26.6, -3];
+      if (sacked) return qbAt(t);
       if (t === 3 || t === 4) return catchPt;
       if (intercepted) return mlbIsContester ? mlbAt(5) : defAt(tgt, 5);
       if (caught) return paths[tgt.chip][5];
       return [catchPt[0], catchPt[1] - 1];
     }
     const throwQ = (result.chain.find(function (c) { return c.key === 'throw'; }) || { value: '' }).value;
-    const captions = [
-      'Snap…',
-      'Routes develop',
-      sep >= 2 ? tgt.pos + ' open!' : sep === 1 ? tgt.pos + ' a step open' : tgt.pos + ' covered',
-      'Throw to ' + tgt.pos + ' — ' + throwQ,
-      caught ? 'Caught!' : intercepted ? 'Picked off!' : 'Incomplete',
-      result.outcome === 'completion' ? 'Tackled after the catch' : '',
-    ];
-    return { paths: paths, defAt: defAt, mlbAt: mlbAt, ballAt: ballAt, captions: captions, caught: caught, intercepted: intercepted };
+    const captions = sacked
+      ? ['Snap…', 'Routes develop', 'Pocket collapsing…', 'SACK!', 'Brought down', '']
+      : [
+        'Snap…',
+        'Routes develop',
+        sep >= 2 ? tgt.pos + ' open!' : sep === 1 ? tgt.pos + ' a step open' : tgt.pos + ' covered',
+        'Throw to ' + tgt.pos + ' — ' + throwQ,
+        caught ? 'Caught!' : intercepted ? 'Picked off!' : 'Incomplete',
+        result.outcome === 'completion' ? 'Tackled after the catch' : '',
+      ];
+    return { paths: paths, defAt: defAt, mlbAt: mlbAt, ballAt: ballAt, qbAt: qbAt, captions: captions, caught: caught, intercepted: intercepted, sacked: sacked };
   }
 
   async function playReveal(result) {
@@ -310,9 +315,13 @@
         if (e.key !== 'rb') { const d = sc.defAt(e, t); placeChip(e.defChip, d[0], d[1]); }
       });
       placeChip('MLB', sc.mlbAt(t)[0], sc.mlbAt(t)[1]);
+      if (sc.sacked) {
+        placeChip('QB', sc.qbAt(t)[0], sc.qbAt(t)[1]);
+        placeChip('DE_R', 32.2 + (26.6 - 32.2) * (t / 5), 2 + (-5 - 2) * (t / 5));   // edge rusher collapses the pocket
+      }
       const b = sc.ballAt(t);
       placeBall(b[0], b[1]);
-      if (t === 5 && !sc.caught && !sc.intercepted) ballEl.style.opacity = '0';
+      if (t === 5 && !sc.caught && !sc.intercepted && !sc.sacked) ballEl.style.opacity = '0';
       if (sc.captions[t]) tickCaption.textContent = sc.captions[t];
       await sleep(t === 0 ? 450 : 680);
     }
@@ -330,6 +339,7 @@
     if (o === 'completion') { cls = 'good'; txt = 'Completion +' + result.yards; }
     else if (o === 'interception') { cls = 'bad'; txt = 'INTERCEPTED'; }
     else if (o === 'pbu') { cls = 'bad'; txt = 'Pass broken up'; }
+    else if (o === 'sack') { cls = 'bad'; txt = 'Sack ' + result.yards; }
     else { cls = 'neutral'; txt = 'Incomplete'; }
     resultLine.className = cls;
     resultLine.textContent = txt;
@@ -363,10 +373,10 @@
   function advanceDown(result) {
     drivePlays += 1;
     if (result.outcome === 'interception') { driveOver = true; driveResult = 'int'; updateHud(); return; }
-    const gain = Math.max(0, result.yards | 0);
-    ballOn += gain; distance -= gain;
+    const gain = result.yards | 0;                 // negative on a sack
+    ballOn = Math.max(1, ballOn + gain); distance -= gain;
     if (ballOn >= 100) { ballOn = 100; score += 7; tdCount += 1; driveOver = true; driveResult = 'td'; }
-    else if (distance <= 0) { down = 1; distance = (100 - ballOn <= 10) ? (100 - ballOn) : 10; }
+    else if (gain > 0 && distance <= 0) { down = 1; distance = (100 - ballOn <= 10) ? (100 - ballOn) : 10; }
     else { down += 1; if (down > 4) { driveOver = true; driveResult = 'downs'; } }
     updateHud();
   }
@@ -406,8 +416,8 @@
   function showCpuPossession() {
     const roll = Math.random();
     let pts, label;
-    if (roll < 0.42)      { pts = 7; label = 'Touchdown'; }
-    else if (roll < 0.68) { pts = 3; label = 'Field goal'; }
+    if (roll < 0.46)      { pts = 7; label = 'Touchdown'; }
+    else if (roll < 0.72) { pts = 3; label = 'Field goal'; }
     else                  { pts = 0; label = 'Defense holds — punt'; }
     cpuScore += pts;
     const rl = document.getElementById('cpu-result');
@@ -435,7 +445,8 @@
   }
 
   function newPlay() {
-    coverage = Math.random() < 0.4 ? 'zone' : 'man';
+    const cr = Math.random();
+    coverage = cr < 0.35 ? 'zone' : cr < 0.55 ? 'blitz' : 'man';   // man 0.45 / zone 0.35 / blitz 0.20
     ['cbX', 'cbZ', 'nb', 'ss', 'mlb'].forEach(function (k) { levMap[k] = Math.random() < 0.5 ? 'outside' : 'inside'; });
     chosenPlay = null; chosenTarget = null;
     updateReadBanner();
@@ -468,7 +479,9 @@
   function updateReadBanner() {
     readText.innerHTML = coverage === 'man'
       ? 'Defense: <b>MAN</b> — read each matchup’s leverage'
-      : 'Defense: <b>COVER 3</b> — zone shell, deep thirds';
+      : coverage === 'zone'
+        ? 'Defense: <b>COVER 3</b> — zone shell, deep thirds'
+        : 'Defense: <b>BLITZ</b> — extra rusher; get it out quick';
     readBanner.dataset.coverage = coverage;
   }
 
@@ -476,8 +489,11 @@
     hintBox.innerHTML = coverage === 'man'
       ? 'It’s <b>man</b>. Target a receiver whose route breaks <b>away</b> from his defender’s leverage — ' +
         'or a <b>drag</b>/<b>flat</b> that beats man underneath. Don’t throw a breaking route into the defender’s leverage.'
-      : 'It’s <b>Cover 3 zone</b>. Target a route that <b>sits in a soft spot</b> — a <b>hitch</b>, <b>curl</b>, or ' +
-        '<b>flat</b>. Avoid the <b>out</b> (the curl-flat defender drives on it).';
+      : coverage === 'zone'
+        ? 'It’s <b>Cover 3 zone</b>. Target a route that <b>sits in a soft spot</b> — a <b>hitch</b>, <b>curl</b>, or ' +
+          '<b>flat</b>. Avoid the <b>out</b> (the curl-flat defender drives on it).'
+        : 'It’s a <b>blitz</b>. An underneath defender is rushing — a quick throw is open, but a slow-developing route ' +
+          '(<b>dig</b>, <b>curl</b>) gets you <b>sacked</b>. Hit a quick route (<b>slant</b>, <b>drag</b>, <b>flat</b>) now.';
   }
 
   // ---------- play / target pickers ----------
@@ -508,7 +524,7 @@
     targetPickerEl.innerHTML = '';
     ELIGIBLE.forEach(function (e) {
       const route = chosenPlay.routes[e.key];
-      const look = coverage === 'man' ? (e.key === 'rb' ? 'LB' : cap(levMap[e.defKey])) : 'Zone';
+      const look = coverage === 'zone' ? 'Zone' : (e.key === 'rb' ? 'LB' : cap(levMap[e.defKey]));
       const b = document.createElement('button');
       b.className = 'target-btn'; b.dataset.tkey = e.key;
       b.innerHTML = '<span class="t-pos">' + e.pos + '</span><span class="t-route">' + cap(route) +
