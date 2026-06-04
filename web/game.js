@@ -263,6 +263,9 @@
     });
     const tgt = elgByKey[chosenTarget];
     const catchPt = paths[tgt.chip][3];
+    // Who actually plays the ball: the MLB when it jumps the lane (or covers the RB underneath),
+    // otherwise the target's own man defender. Drives the INT/PBU ball path + MLB converge.
+    const mlbIsContester = inLane || (chosenTarget === 'rb' && sep === 0);
 
     function defAt(e, t) {
       const rp = paths[e.chip][t];
@@ -274,13 +277,13 @@
       return [rp[0] + sideline * Math.min(beat, 2), rp[1] - (0.5 + beat * 0.3)];
     }
     function mlbAt(t) {
-      if (inLane && t >= 3) return [catchPt[0] + (catchPt[0] < CENTER ? 1 : -1), catchPt[1] - 0.6];
+      if (mlbIsContester && t >= 3) return [catchPt[0] + (catchPt[0] < CENTER ? 1 : -1), catchPt[1] - 0.6];
       return [27 + t * 0.2, 5.5 + t * 0.5];
     }
     function ballAt(t) {
       if (t <= 2) return [26.6, -3];
       if (t === 3 || t === 4) return catchPt;
-      if (intercepted) return defAt(tgt, 5);
+      if (intercepted) return mlbIsContester ? mlbAt(5) : defAt(tgt, 5);
       if (caught) return paths[tgt.chip][5];
       return [catchPt[0], catchPt[1] - 1];
     }

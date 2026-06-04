@@ -145,7 +145,7 @@ def resolve(rec: Player, qb_p: Player, defn: Player, lb: Player,
         bsu_target = 5 + defender_in_window.r("BSU") // 4 + QUALITY_PENALTY[quality]
         if check(bsu_target):
             if check(10 + defender_in_window.r("BSU") // 5):
-                return {"outcome": "interception", "yards": -max(0, d100() // 8)}
+                return {"outcome": "interception", "yards": 0}
             return {"outcome": "pbu", "yards": 0}
 
     # T4 catch

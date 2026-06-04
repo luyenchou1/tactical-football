@@ -10,7 +10,7 @@
 
   // ---------- dice / helpers ----------
   function d100() { return Math.floor(Math.random() * 100) + 1; }
-  function trunc(n) { return Math.trunc(n); }
+  function trunc(n) { return Math.floor(n); }  // floors (matches Python //) so JS↔Python agree on negative-operand division
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
   function fmt(n) { return (n >= 0 ? '+' : '−') + Math.abs(n); }
 
@@ -170,7 +170,7 @@
             detail: defender.name + ' jumps the route and picks it',
             math: 'break-up ' + bsuT + '% (rolled ' + bsuRoll + '); INT ' + intT + '% (rolled ' + intRoll + ')',
           });
-          return finish('interception', -Math.max(0, trunc(d100() / 8)), chain, meta);
+          return finish('interception', 0, chain, meta);
         }
         chain.push({
           key: 'contest', label: 'Contest', status: 'bad', value: 'broken up',
