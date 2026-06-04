@@ -198,6 +198,15 @@ html, body {
 .t-pos { font-size: 13px; font-weight: 800; }
 .t-route { font-size: 10px; color: #cdd7e3; }
 .t-look { font-size: 9px; color: var(--muted); }
+/* read verdict — colored inset so a glance at the field/buttons shows the matchup */
+.target-btn.v-good { box-shadow: inset 3px 0 0 var(--good); }
+.target-btn.v-neutral { box-shadow: inset 3px 0 0 var(--neutral); }
+.target-btn.v-bad { box-shadow: inset 3px 0 0 var(--bad); }
+
+/* result juice — a quick pop on the outcome, drive banner, and final score */
+@keyframes tf-pop { 0% { transform: scale(.7); opacity: .35; } 60% { transform: scale(1.07); opacity: 1; } 100% { transform: scale(1); } }
+.pop { animation: tf-pop .4s cubic-bezier(.2, .8, .3, 1.2); }
+@media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
 
 #snap-btn, #next-btn {
   margin-top: 4px;

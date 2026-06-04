@@ -54,8 +54,9 @@
   function readStatus(route, coverage, leverage) {
     const rt = ROUTES[route] || ROUTES.slant;
     if (coverage === 'zone') return rt.zoneSep > 10 ? 'good' : rt.zoneSep >= 0 ? 'neutral' : 'bad';
+    if (coverage === 'blitz') return rt.tt <= 1.6 ? 'good' : rt.tt <= 2.1 ? 'neutral' : 'bad';   // vs blitz: throw quick
     const levB = levTerm(rt.brk, leverage);
-    return levB > 0 ? 'good' : levB < 0 ? 'bad' : (rt.manBase >= 8 || coverage === 'blitz') ? 'good' : 'neutral';
+    return levB > 0 ? 'good' : levB < 0 ? 'bad' : (rt.manBase >= 8 ? 'good' : 'neutral');
   }
 
   // ---------- default demo roster ----------

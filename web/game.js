@@ -164,7 +164,7 @@
         const rx = baseX[e.chip];
         const sideline = rx < CENTER ? -1 : 1;
         const dir = (levMap[e.defKey] === 'outside') ? sideline : -sideline;
-        shade[e.defChip] = rx + dir * 1.6;
+        shade[e.defChip] = rx + dir * 2.8;
       });
     }
     FORMATION.forEach(function (p) {
@@ -203,7 +203,13 @@
     ELIGIBLE.forEach(function (e) {
       const pts = routePath(baseX[e.chip], FORMATION.find(function (f) { return f.id === e.chip; }).y, chosenPlay.routes[e.key]);
       const isTgt = (e.key === chosenTarget);
-      drawPolyline(pts, isTgt ? '#ffcf33' : 'rgba(255,255,255,0.45)', !isTgt);
+      let color = 'rgba(255,255,255,0.45)';
+      if (isTgt) {
+        const lev = coverage === 'zone' ? null : levMap[e.defKey];
+        const q = Sim.readStatus(chosenPlay.routes[e.key], coverage, lev);
+        color = q === 'good' ? '#46c46a' : q === 'bad' ? '#e8543e' : '#ffcf33';
+      }
+      drawPolyline(pts, color, !isTgt);
     });
   }
 
@@ -253,6 +259,8 @@
 
   // ---------- the tick reveal ----------
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, fastMode ? 0 : ms); }); }
+  function buzz(p) { if (p && navigator.vibrate) { try { navigator.vibrate(p); } catch (e) {} } }
+  function popIn(el) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
 
   function buildScript(result) {
     const meta = result.meta;
@@ -343,11 +351,14 @@
     else { cls = 'neutral'; txt = 'Incomplete'; }
     resultLine.className = cls;
     resultLine.textContent = txt;
+    popIn(resultLine);
+    buzz(driveResult === 'td' ? [40, 30, 70] : (o === 'interception' || o === 'sack') ? [70] : o === 'completion' ? 12 : 0);
 
     if (driveOver) {
       if (driveResult === 'td')         { driveBanner.className = 'td';       driveBanner.textContent = '🏈 TOUCHDOWN  +7'; }
       else if (driveResult === 'downs') { driveBanner.className = 'turnover'; driveBanner.textContent = 'Turnover on downs'; }
       else                              { driveBanner.className = 'turnover'; driveBanner.textContent = 'Intercepted — turnover'; }
+      popIn(driveBanner);
       nextBtn.textContent = 'Next drive ›';
     } else {
       driveBanner.className = 'hidden';
@@ -441,6 +452,8 @@
     const best = document.getElementById('go-best');
     best.textContent = isBest ? ('New best!  ' + score + ' pts') : ('Best  ' + bestScore + ' pts');
     best.className = isBest ? 'go-best new' : 'go-best';
+    popIn(g);
+    buzz(result === 'WIN' ? [60, 40, 60, 40, 90] : result === 'LOSS' ? [120] : [40]);
     setStage('gameover');
   }
 
@@ -524,9 +537,11 @@
     targetPickerEl.innerHTML = '';
     ELIGIBLE.forEach(function (e) {
       const route = chosenPlay.routes[e.key];
+      const lev = coverage === 'zone' ? null : levMap[e.defKey];
+      const q = Sim.readStatus(route, coverage, lev);     // good | neutral | bad — colors the chip + route
       const look = coverage === 'zone' ? 'Zone' : (e.key === 'rb' ? 'LB' : cap(levMap[e.defKey]));
       const b = document.createElement('button');
-      b.className = 'target-btn'; b.dataset.tkey = e.key;
+      b.className = 'target-btn v-' + q; b.dataset.tkey = e.key;
       b.innerHTML = '<span class="t-pos">' + e.pos + '</span><span class="t-route">' + cap(route) +
                     '</span><span class="t-look">' + look + '</span>';
       b.addEventListener('click', function () { selectTarget(e.key); });
