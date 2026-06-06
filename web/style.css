@@ -112,7 +112,7 @@ html, body {
 /* player chips */
 .chip {
   position: absolute;
-  width: 7.8%;
+  width: 6.5%;
   aspect-ratio: 1;
   transform: translate(-50%, -50%);
   scale: 1;                            /* squash/stretch & pop live here — never touch transform */

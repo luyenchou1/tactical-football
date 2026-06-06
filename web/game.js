@@ -11,35 +11,38 @@
   const CENTER = 26.6;
 
   // ---------- field coordinate system ----------
-  const FIELD = { minY: -9, maxY: 21, width: 53.3 };
+  const FIELD = { minY: -8, maxY: 18, width: 53.3 };   // tighter vertical window = more px/yard = less crowding
   function toLeft(x) { return (x / FIELD.width) * 100; }
   function toTop(y) { return ((FIELD.maxY - y) / (FIELD.maxY - FIELD.minY)) * 100; }
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
   // ---------- formation (base positions in yard space) ----------
+  // Positions are stylized for legibility (top-down arcade view), not to scale:
+  // wider O-line splits, the D-line set ~3yd off the ball, and the second level
+  // pushed back so routes and animations read clearly with minimal chip overlap.
   const FORMATION = [
     { id: 'C',  team: 'off', num: 55, x: 26.6, y: 0 },
-    { id: 'LG', team: 'off', num: 66, x: 23.8, y: 0 },
-    { id: 'RG', team: 'off', num: 67, x: 29.4, y: 0 },
-    { id: 'LT', team: 'off', num: 73, x: 21.0, y: 0 },
-    { id: 'RT', team: 'off', num: 76, x: 32.2, y: 0 },
+    { id: 'LG', team: 'off', num: 66, x: 23.3, y: 0 },
+    { id: 'RG', team: 'off', num: 67, x: 29.9, y: 0 },
+    { id: 'LT', team: 'off', num: 73, x: 20.0, y: 0 },
+    { id: 'RT', team: 'off', num: 76, x: 33.2, y: 0 },
     { id: 'QB', team: 'off', num: 9,  x: 26.6, y: -5, simKey: 'qb' },
-    { id: 'RB', team: 'off', num: 28, x: 23.2, y: -5, simKey: 'rb' },
-    { id: 'TE', team: 'off', num: 87, x: 18.4, y: 0, simKey: 'te' },
-    { id: 'X',  team: 'off', num: 80, x: 5.0,  y: 0, simKey: 'x' },
-    { id: 'Z',  team: 'off', num: 18, x: 48.0, y: 0, simKey: 'z' },
-    { id: 'SLOT', team: 'off', num: 11, x: 38.0, y: 0, simKey: 'slot' },
-    { id: 'DE_L', team: 'def', num: 91, x: 21.0, y: 2 },
-    { id: 'DT_L', team: 'def', num: 94, x: 24.6, y: 2 },
-    { id: 'DT_R', team: 'def', num: 98, x: 28.6, y: 2 },
-    { id: 'DE_R', team: 'def', num: 56, x: 32.2, y: 2 },
-    { id: 'MLB', team: 'def', num: 54, x: 27.0, y: 5.5, simKey: 'mlb' },
-    { id: 'SLB', team: 'def', num: 50, x: 33.5, y: 6.0 },
-    { id: 'CB_X', team: 'def', num: 24, x: 6.0,  y: 5.0, simKey: 'cbX' },
-    { id: 'CB_Z', team: 'def', num: 21, x: 47.0, y: 5.0, simKey: 'cbZ' },
-    { id: 'NB',   team: 'def', num: 27, x: 40.0, y: 4.0, simKey: 'nb' },
-    { id: 'SS',   team: 'def', num: 32, x: 18.4, y: 4.5, simKey: 'ss' },
-    { id: 'FS',   team: 'def', num: 31, x: 27.0, y: 14.0, simKey: 'fs' },
+    { id: 'RB', team: 'off', num: 28, x: 21.5, y: -6, simKey: 'rb' },
+    { id: 'TE', team: 'off', num: 87, x: 16.0, y: 0, simKey: 'te' },
+    { id: 'X',  team: 'off', num: 80, x: 4.5,  y: 0, simKey: 'x' },
+    { id: 'Z',  team: 'off', num: 18, x: 49.0, y: 0, simKey: 'z' },
+    { id: 'SLOT', team: 'off', num: 11, x: 39.5, y: 0, simKey: 'slot' },
+    { id: 'DE_L', team: 'def', num: 91, x: 20.0, y: 3.3 },
+    { id: 'DT_L', team: 'def', num: 94, x: 24.2, y: 3.3 },
+    { id: 'DT_R', team: 'def', num: 98, x: 29.0, y: 3.3 },
+    { id: 'DE_R', team: 'def', num: 56, x: 33.2, y: 3.3 },
+    { id: 'MLB', team: 'def', num: 54, x: 26.6, y: 7.0, simKey: 'mlb' },
+    { id: 'SLB', team: 'def', num: 50, x: 33.5, y: 7.5 },
+    { id: 'CB_X', team: 'def', num: 24, x: 5.0,  y: 6.5, simKey: 'cbX' },
+    { id: 'CB_Z', team: 'def', num: 21, x: 48.0, y: 6.5, simKey: 'cbZ' },
+    { id: 'NB',   team: 'def', num: 27, x: 40.0, y: 6.0, simKey: 'nb' },
+    { id: 'SS',   team: 'def', num: 32, x: 16.0, y: 6.0, simKey: 'ss' },
+    { id: 'FS',   team: 'def', num: 31, x: 26.6, y: 13.0, simKey: 'fs' },
   ];
   const baseX = {}; FORMATION.forEach(function (f) { baseX[f.id] = f.x; });
 
