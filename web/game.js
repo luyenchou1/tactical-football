@@ -261,6 +261,8 @@
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, fastMode ? 0 : ms); }); }
   function buzz(p) { if (p && navigator.vibrate) { try { navigator.vibrate(p); } catch (e) {} } }
   function popIn(el) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+  function sfx(n) { if (window.Sound) Sound.sfx(n); }
+  function announce(k) { if (window.Sound) Sound.announce(k); }
 
   function buildScript(result) {
     const meta = result.meta;
@@ -309,7 +311,7 @@
         caught ? 'Caught!' : intercepted ? 'Picked off!' : 'Incomplete',
         result.outcome === 'completion' ? 'Tackled after the catch' : '',
       ];
-    return { paths: paths, defAt: defAt, mlbAt: mlbAt, ballAt: ballAt, qbAt: qbAt, captions: captions, caught: caught, intercepted: intercepted, sacked: sacked };
+    return { paths: paths, defAt: defAt, mlbAt: mlbAt, ballAt: ballAt, qbAt: qbAt, captions: captions, caught: caught, intercepted: intercepted, sacked: sacked, sep: sep };
   }
 
   async function playReveal(result) {
@@ -331,6 +333,15 @@
       placeBall(b[0], b[1]);
       if (t === 5 && !sc.caught && !sc.intercepted && !sc.sacked) ballEl.style.opacity = '0';
       if (sc.captions[t]) tickCaption.textContent = sc.captions[t];
+      if (t === 0) sfx('snap');
+      else if (t === 2 && sc.sep >= 2 && !sc.sacked) sfx('open');
+      else if (t === 3 && !sc.sacked) sfx('throw');
+      else if (t === 4) {
+        if (sc.sacked) sfx('sack');
+        else if (sc.intercepted) sfx('int');
+        else if (sc.caught) sfx('catch');
+        else if (result.outcome === 'pbu') sfx('pbu');
+      }
       await sleep(t === 0 ? 450 : 680);
     }
     await sleep(420);
@@ -353,6 +364,10 @@
     resultLine.textContent = txt;
     popIn(resultLine);
     buzz(driveResult === 'td' ? [40, 30, 70] : (o === 'interception' || o === 'sack') ? [70] : o === 'completion' ? 12 : 0);
+    if (driveResult === 'td') { sfx('td'); sfx('crowd'); announce('td'); }
+    else if (o === 'interception') { sfx('crowd'); announce('int'); }
+    else if (o === 'sack') { announce('sack'); }
+    else if (o === 'completion' && result.meta.sep >= 2) { announce('dime'); }
 
     if (driveOver) {
       if (driveResult === 'td')         { driveBanner.className = 'td';       driveBanner.textContent = '🏈 TOUCHDOWN  +7'; }
@@ -455,6 +470,8 @@
     best.className = isBest ? 'go-best new' : 'go-best';
     popIn(g);
     buzz(result === 'WIN' ? [60, 40, 60, 40, 90] : result === 'LOSS' ? [120] : [40]);
+    sfx(result === 'WIN' ? 'win' : 'loss');
+    if (result === 'WIN') announce('win');
     setStage('gameover');
   }
 
@@ -526,6 +543,7 @@
   }
 
   function selectPlay(pl) {
+    sfx('ui');
     chosenPlay = pl; chosenTarget = null;
     document.querySelectorAll('.play-btn').forEach(function (b) { b.classList.toggle('selected', b.dataset.play === pl.id); });
     renderTargetPicker();
@@ -553,6 +571,7 @@
   }
 
   function selectTarget(key) {
+    sfx('ui');
     chosenTarget = key;
     document.querySelectorAll('.target-btn').forEach(function (b) { b.classList.toggle('selected', b.dataset.tkey === key); });
     ELIGIBLE.forEach(function (e) { chips[e.chip].classList.toggle('primary', e.key === key); });
@@ -575,14 +594,31 @@
     playReveal(result);
   });
   nextBtn.addEventListener('click', function () {
+    sfx('ui');
     if (!driveOver) { newPlay(); return; }
     showCpuPossession();
   });
   cpuContinueBtn.addEventListener('click', function () {
+    sfx('ui');
     if (drivesPlayed >= DRIVES_PER_GAME) showGameOver();
     else startDrive();
   });
-  newGameBtn.addEventListener('click', newGame);
+  newGameBtn.addEventListener('click', function () { sfx('ui'); newGame(); });
+
+  // ---------- sound mute toggle ----------
+  const muteBtn = document.getElementById('mute-btn');
+  function syncMute() {
+    if (!muteBtn) return;
+    const m = window.Sound ? Sound.isMuted() : false;
+    muteBtn.textContent = m ? '🔇' : '🔊';
+    muteBtn.classList.toggle('muted', m);
+  }
+  if (muteBtn) muteBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (window.Sound) { const nowMuted = Sound.setMuted(!Sound.isMuted()); if (!nowMuted) sfx('ui'); }
+    syncMute();
+  });
+  syncMute();
 
   // ---------- boot ----------
   buildChips();
