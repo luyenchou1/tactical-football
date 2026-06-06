@@ -406,7 +406,7 @@
     document.getElementById('hud-down').textContent =
       (driveOver && driveResult === 'td') ? 'TD' : ordinal(down) + ' & ' + (goalToGo ? 'Goal' : Math.max(1, distance));
     document.getElementById('hud-spot').textContent = fieldPos(ballOn);
-    document.getElementById('hud-score').textContent = score + '–' + cpuScore;
+    document.getElementById('hud-score').textContent = score + '-' +cpuScore;
     document.getElementById('hud-drive').textContent = drivesPlayed + ' / ' + DRIVES_PER_GAME;
   }
 
@@ -444,7 +444,7 @@
     const isBest = score > bestScore;
     if (isBest) { bestScore = score; try { localStorage.setItem('tf-best', String(score)); } catch (e) {} }
     const result = score > cpuScore ? 'WIN' : score < cpuScore ? 'LOSS' : 'TIE';
-    document.getElementById('go-score').textContent = score + '–' + cpuScore;
+    document.getElementById('go-score').textContent = score + '-' +cpuScore;
     const g = document.getElementById('go-grade');
     g.textContent = result;
     g.className = result === 'WIN' ? 'win' : result === 'LOSS' ? 'loss' : 'tie';

@@ -1,24 +1,30 @@
 /* Tactical Football web prototype — Retro Bowl flat aesthetic, mobile-first. */
 
 :root {
-  --field-a: #3c8c43;
-  --field-b: #379040;
-  --line: rgba(255, 255, 255, 0.55);
-  --los: #2e7bd6;
-  --first-down: #f2c200;
-  --off: #1f2d5c;        /* offense chip */
-  --off-edge: #2c3f7a;
-  --def: #b2271f;        /* defense chip */
-  --def-edge: #d23a30;
-  --star: #ffcf33;       /* primary read highlight */
-  --panel-bg: #11151c;
-  --panel-2: #1a2029;
-  --ink: #eef2f7;
-  --muted: #8a97a8;
-  --good: #46c46a;
-  --neutral: #f2c200;
-  --bad: #e8543e;
+  --field-a: #00a800;        /* NES grass — dark mow stripe */
+  --field-b: #58d854;        /* NES grass — light mow stripe */
+  --line: rgba(252, 252, 252, 0.7);
+  --los: #0078f8;            /* line of scrimmage + CTA buttons (NES blue) */
+  --first-down: #f8b800;     /* NES gold */
+  --off: #0078f8;            /* offense chip — NES blue */
+  --off-edge: #103cb0;
+  --def: #f83800;            /* defense chip — NES red */
+  --def-edge: #a01000;
+  --star: #f8b800;           /* primary read / score — NES gold */
+  --bg: #101010;             /* stage chrome */
+  --panel-bg: #181820;       /* cartridge panel */
+  --hud-bg: #000000;
+  --panel-2: #20202c;
+  --ink: #fcfcfc;
+  --muted: #bcbcbc;
+  --good: #00b800;
+  --neutral: #f8b800;
+  --bad: #e40058;
+  --fire-in: #ff8a00;
+  --fire-out: #ff3b00;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-arcade: "Press Start 2P", monospace;   /* pixel display — short labels/scores only */
+  --font-term: "VT323", ui-monospace, monospace; /* terminal readout — changing stat numbers */
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -26,7 +32,7 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: #05070a;
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font);
   overscroll-behavior: none;
@@ -39,31 +45,34 @@ html, body {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: #05070a;
+  background: var(--bg);
 }
 
 /* ---------- HUD ---------- */
 #hud {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
-  background: #0a0d12;
-  border-bottom: 1px solid #1c222c;
+  padding: 8px 14px;
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  background: var(--hud-bg);
+  border-bottom: 2px solid #000;
 }
-.hud-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.hud-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .hud-cell:first-child { align-items: flex-start; }
 .hud-cell:last-child { align-items: flex-end; }
-.hud-label { font-size: 9px; letter-spacing: 0.12em; color: var(--muted); }
-.hud-cell span:last-child { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hud-label { font-family: var(--font-arcade); font-size: 8px; letter-spacing: 0.04em; color: var(--muted); }
+.hud-cell span:last-child { font-family: var(--font-term); font-size: 20px; line-height: 1; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: var(--ink); }
+#hud-score { font-family: var(--font-arcade); font-size: 16px; color: var(--star); }
 
 /* ---------- Field ---------- */
-#field-wrap { padding: 8px; background: #05070a; }
+#field-wrap { position: relative; padding: 8px; background: var(--bg); }
 #field {
   position: relative;
   width: 100%;
   aspect-ratio: 53.3 / 30;            /* square yards */
-  border-radius: 8px;
+  border-radius: 4px;
   overflow: hidden;
   background:
     repeating-linear-gradient(
@@ -72,7 +81,7 @@ html, body {
       var(--field-a) 9.5%,
       var(--field-b) 9.5%,
       var(--field-b) 19%);
-  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25);
+  box-shadow: 0 0 0 3px #000, inset 0 0 0 2px rgba(0,0,0,0.3);   /* cartridge bezel */
 }
 
 /* yard lines every 5 yds drawn over the stripes */
@@ -103,22 +112,23 @@ html, body {
 /* player chips */
 .chip {
   position: absolute;
-  width: 7.4%;
+  width: 7.8%;
   aspect-ratio: 1;
   transform: translate(-50%, -50%);
+  scale: 1;                            /* squash/stretch & pop live here — never touch transform */
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 800;
-  color: #fff;
+  font-family: var(--font-arcade); font-size: 8px; line-height: 1;
+  color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.5);
   z-index: 4;
-  transition: left 0.55s cubic-bezier(.3,.7,.4,1), top 0.55s cubic-bezier(.3,.7,.4,1);
+  transition: left 0.5s cubic-bezier(.3,.7,.4,1), top 0.5s cubic-bezier(.3,.7,.4,1), scale .18s ease;
   user-select: none; cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.45);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.35), inset 0 -3px 3px rgba(0,0,0,.35), 0 3px 0 rgba(0,0,0,.45);
 }
-.chip.off { background: var(--off); border: 1.5px solid var(--off-edge); }
-.chip.def { background: var(--def); border: 1.5px solid var(--def-edge); }
-.chip.key { box-shadow: 0 0 0 2px rgba(255,255,255,0.25), 0 1px 3px rgba(0,0,0,0.45); }
-.chip.primary { box-shadow: 0 0 0 2.5px var(--star), 0 1px 4px rgba(0,0,0,0.5); }
+.chip.off { background: var(--off); border: 2px solid var(--off-edge); }
+.chip.def { background: var(--def); border: 2px solid var(--def-edge); }
+.chip.key { box-shadow: inset 0 2px 0 rgba(255,255,255,.4), 0 0 0 2px rgba(255,255,255,.25), 0 3px 0 rgba(0,0,0,.45); }
+.chip.primary { box-shadow: 0 0 0 3px var(--star), 0 0 12px var(--star), 0 3px 0 rgba(0,0,0,.5); z-index: 6; }
 .chip .star {
   position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
   font-size: 10px; color: var(--star); text-shadow: 0 1px 1px rgba(0,0,0,.6);
@@ -208,15 +218,17 @@ html, body {
 .pop { animation: tf-pop .4s cubic-bezier(.2, .8, .3, 1.2); }
 @media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
 
-#snap-btn, #next-btn {
-  margin-top: 4px;
-  background: var(--los); color: #fff; border: none; border-radius: 12px;
-  padding: 16px; font-size: 17px; font-weight: 800; letter-spacing: 0.06em;
-  cursor: pointer; transition: opacity .15s, transform .08s;
+#snap-btn, #next-btn, #new-game-btn, #cpu-continue {
+  margin-top: 4px; width: 100%;
+  background: var(--los); color: #fff; border: 2px solid rgba(0,0,0,.5); border-radius: 10px;
+  padding: 14px; font-family: var(--font-arcade); font-size: 13px; letter-spacing: 0.02em;
+  cursor: pointer; box-shadow: 0 6px 0 rgba(0,0,0,.55); transition: transform .06s, box-shadow .06s;
 }
-#snap-btn:active, #next-btn:active { transform: scale(0.98); }
-#snap-btn:disabled { background: #2a323e; color: #5a6677; cursor: default; }
-#next-btn { background: #2f8f4a; }
+#snap-btn:active, #next-btn:active, #new-game-btn:active, #cpu-continue:active {
+  transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.55);
+}
+#snap-btn:disabled { background: #2a323e; color: #6a7687; box-shadow: 0 6px 0 rgba(0,0,0,.4); cursor: default; }
+#next-btn { background: #2f9f4a; }
 
 /* animating */
 #tick-caption { text-align: center; font-size: 16px; font-weight: 700; padding: 28px 0; color: var(--ink); min-height: 80px; }
@@ -235,8 +247,8 @@ html, body {
 /* end-zone band + goal line (shown only when the goal is within the field view) */
 #endzone {
   position: absolute; left: 0; right: 0; top: 0; display: none;
-  background: repeating-linear-gradient(45deg, rgba(46,123,214,0.22) 0 9px, rgba(46,123,214,0.10) 9px 18px);
-  border-bottom: 3px solid #fff; z-index: 0; pointer-events: none;
+  background: repeating-linear-gradient(45deg, #0078f8 0 10px, #0058f8 10px 20px);
+  border-bottom: 3px solid #fcfcfc; z-index: 0; pointer-events: none;
 }
 .fieldline.first.goal { background: #fff; height: 3px; }
 
@@ -261,12 +273,7 @@ html, body {
 #go-grade { font-size: 38px; font-weight: 900; color: var(--star); margin: 6px 0; }
 .go-best { font-size: 14px; font-weight: 700; color: var(--muted); }
 .go-best.new { color: var(--good); }
-#new-game-btn {
-  margin-top: 14px; width: 100%; background: var(--los); color: #fff; border: none;
-  border-radius: 12px; padding: 16px; font-size: 17px; font-weight: 800; letter-spacing: 0.06em;
-  cursor: pointer; transition: transform .08s;
-}
-#new-game-btn:active { transform: scale(0.98); }
+#new-game-btn { margin-top: 14px; }
 #go-grade.win { color: var(--good); }
 #go-grade.loss { color: var(--bad); }
 #go-grade.tie { color: var(--star); }
@@ -279,12 +286,7 @@ html, body {
 #cpu-result.neutral { color: var(--neutral); }
 #cpu-result.bad { color: var(--bad); }
 #cpu-tally { font-size: 14px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
-#cpu-continue {
-  margin-top: 14px; width: 100%; background: var(--los); color: #fff; border: none;
-  border-radius: 12px; padding: 16px; font-size: 17px; font-weight: 800; letter-spacing: 0.06em;
-  cursor: pointer; transition: transform .08s;
-}
-#cpu-continue:active { transform: scale(0.98); }
+#cpu-continue { margin-top: 14px; }
 
 /* ---------- player card popover ---------- */
 #card-layer {
@@ -315,3 +317,25 @@ html, body {
 .v.mid { color: var(--neutral); }
 .v.lo { color: var(--bad); }
 .card-close { margin-top: 14px; width: 100%; background: #222a35; color: var(--ink); border: none; border-radius: 10px; padding: 11px; font-weight: 700; cursor: pointer; }
+
+/* ---------- arcade typography ---------- */
+/* Press Start 2P (pixel) only on short ASCII display text; VT323 (terminal) on changing numbers/banners */
+#go-score { font-family: var(--font-arcade); font-size: 40px; }
+#go-grade { font-family: var(--font-arcade); font-size: 30px; }
+#drive-banner { font-family: var(--font-term); font-size: 17px; letter-spacing: .02em; }
+#cpu-result { font-family: var(--font-term); }
+#go-sub, #cpu-tally, #go-title, #cpu-title { font-family: var(--font-term); }
+#go-sub, #cpu-tally { font-size: 16px; }
+#result-line { text-transform: uppercase; letter-spacing: .03em; }
+
+/* ---------- sound mute chip (top-right over the field) ---------- */
+#mute-btn {
+  position: absolute; top: 16px; right: 16px; z-index: 8;
+  width: 30px; height: 30px; border-radius: 6px; padding: 0;
+  background: rgba(0,0,0,.55); border: 2px solid rgba(0,0,0,.6);
+  color: #fff; font-size: 15px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 3px 0 rgba(0,0,0,.4); transition: transform .06s, box-shadow .06s;
+}
+#mute-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.4); }
+#mute-btn.muted { opacity: .55; }
