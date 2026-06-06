@@ -414,6 +414,5 @@ html, body {
 .chip.open-neutral { box-shadow: 0 0 0 3px #ffd21e, 0 0 10px #ffd21e, 0 3px 0 rgba(0, 0, 0, .5); z-index: 6; }
 .chip.open-bad     { box-shadow: 0 0 0 3px #ff4133, 0 0 8px  #ff4133, 0 3px 0 rgba(0, 0, 0, .5); }
 @media (prefers-reduced-motion: reduce) {
-  #field.reading .chip { transition: none; }
-  #pressure-fill { transition: none !important; }
+  #field.reading .chip { transition: none; }   /* routes snap (no smooth motion); the pressure bar still drains as a benign timer */
 }

@@ -1,14 +1,14 @@
 # Tactical Football
 
-Turn-based tactical American football for mobile — think **XCOM-meets-football**. You read the defense (man, Cover 3 zone, or blitz), call a play, choose who to throw to, and watch it resolve through a chain of rating-driven dice rolls — with a pass rush pricing every decision.
+Turn-based tactical American football for mobile — think **XCOM-meets-football**. The defense disguises its coverage, so you call a play, **snap the ball**, and read the rotation live — finding the open man in a short window before the pass rush gets home — then watch it resolve through a chain of rating-driven dice rolls.
 
-> **Status:** playable, and now juicy. A 4-play book over 7 routes, 3 defensive looks, a pass rush + sacks, interceptions on forced reads, and a 5-round game vs a CPU opponent — wrapped in an arcade audiovisual layer (NES field, procedural 8-bit sound, an announcer, screen shake, confetti, and NBA-Jam-style callouts). The matchup math runs in two engines (JS + a Python mirror) kept in sync and guarded by a test suite.
+> **Status:** playable, and now juicy. A 4-play book over 7 routes, 3 **disguised** defensive looks you diagnose **post-snap** in a timed read window, a pass rush + sacks, interceptions on forced reads, and a 5-round game vs a CPU opponent — wrapped in an arcade audiovisual layer (NES field, procedural 8-bit sound, an announcer, screen shake, confetti, and NBA-Jam-style callouts). The matchup math runs in two engines (JS + a Python mirror) kept in sync and guarded by a test suite.
 
 ## Play it
 
 **▶ Play it live: https://luyenchou1.github.io/tactical-football/** — open it on your phone and **Add to Home Screen** to install it (works offline once installed).
 
-A game is **5 rounds**: each round you get a possession, then the opponent gets one. Read the defense (**man**, **Cover 3 zone**, or **blitz**), call a play, target the open receiver, and outscore them — but beware the pass rush: hold a deep route too long and you're sacked. Your best score is saved.
+A game is **5 rounds**: each round you get a possession, then the opponent gets one. The coverage is **disguised** — call a play, snap it, then read the rotation (**man**, **Cover 3 zone**, or **blitz**) live and throw to whoever comes open, all before the pass rush gets home. Outscore them; your best score is saved.
 
 Run it locally (static web app — no build step, no dependencies):
 
@@ -31,17 +31,19 @@ Every roll is shown in the post-play breakdown — tap a row to see the math beh
 ## How a play resolves
 
 ```
-snap → separation (route vs coverage) → pass rush (sack / hurry / clean)
-     → throw quality → catch / PBU / INT → yards after catch
+pre-snap: call a play  (coverage disguised)
+snap → coverage declares → READ WINDOW: routes develop, the open man lights up
+     → you throw (or hold too long → sacked) → separation roll
+     → catch / PBU / INT → yards after catch
 ```
 
-The "chess move" is pre-snap. The defense shows **man (Cover 1)**, **Cover 3 zone**, or a **blitz**; you call a **play** (which assigns all five eligible receivers a route) and pick **who to throw to**, reading each matchup:
+The "chess move" is now **post-snap**. Pre-snap the defense is **disguised** — you only call a **play** (which assigns all five eligible receivers a route). At the snap the coverage declares itself (**man**, **Cover 3 zone**, or **blitz**) and a short, forgiving **read window** opens: the routes develop and each receiver's openness lights up green/amber/red as his route breaks. Tap the open man — on the field or the live target row — before the rush gets home.
 
-- **vs man** — target a route that breaks *away* from its defender's leverage (slant beats outside, out beats inside), or a drag/flat that beats man underneath. Force a route *into* leverage and it can be picked.
-- **vs Cover 3 zone** — target a route that settles in a soft spot (hitch, curl, flat); the out runs into the curl-flat defender.
-- **vs a blitz** — a defender vacates, so a **quick** throw is wide open and safe — or take a **deeper shot** for more yards if you'll risk the sack.
+- **vs man** — the route that breaks *away* from its defender's leverage comes open (slant beats outside, out beats inside); a drag/flat beats man underneath. Force a route *into* leverage and it can be picked.
+- **vs Cover 3 zone** — the route that settles in a soft spot comes open (hitch, curl, flat); the out runs into the curl-flat defender.
+- **vs a blitz** — a defender vacates, so a **quick** throw is wide open — or take a **deeper shot** for more yards if you'll risk the sack.
 
-Every route has a time-to-throw, so depth costs time: holding the deep **dig** lets the rush home (~8% sack in base coverage, ~19% vs a blitz) while a quick slant is ~1%. The target buttons and the chosen route are colored green/amber/red by the read, and every roll is surfaced in the post-play breakdown — legible, not a black box.
+Every route has a time-to-throw, so depth costs time: holding the deep **dig** lets the rush home (~8% sack in base coverage, ~19% vs a blitz) while a quick slant is ~1%; dither past the window and you're sacked outright. The openness cue you read in the window comes from the *same* read math surfaced in the post-play breakdown — what you see is what you get, legible, not a black box.
 
 ## Calibration
 
@@ -92,8 +94,8 @@ It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) a
 - [x] Tuned opponent, a zero-dep Node test harness, and a drive-level balance sim
 - [x] Arcade audiovisual layer: NES re-skin + pixel fonts, procedural sound + announcer + menu music, screen shake, particles, SLAM callouts, on-fire streak, painted field + CRT finish
 - [x] Read legibility (colored verdicts) + outcome juice (pop + haptics)
-- [ ] Post-snap reads — pick who comes open as the play develops
-- [ ] Disguised coverage — pre-snap tells and bluffs to read
+- [x] Post-snap reads — coverage disguised pre-snap, then find the open man in a timed read window
+- [ ] Pre-snap tells & bluffs — readable keys the disguise can lie about
 - [ ] Coach both sides — call defense on the opponent's possessions
 - [ ] Deep shots (go / post / corner) with safety help in the model
 

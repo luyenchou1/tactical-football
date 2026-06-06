@@ -527,7 +527,7 @@
   }
 
   // ---------- post-snap read window ----------
-  const READ_WINDOW_MS = 2500;   // forgiving: time to scan and decide before the rush
+  const READ_WINDOW_MS = 2800;   // forgiving: time to scan and decide before the rush
 
   // Geometry + read cues for the live window — no result/roll needed yet.
   function buildPreThrow() {
