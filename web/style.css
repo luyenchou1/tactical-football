@@ -339,3 +339,6 @@ html, body {
 }
 #mute-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.4); }
 #mute-btn.muted { opacity: .55; }
+
+/* full-frame impact flash (over the field) */
+#flash { position: absolute; inset: 0; z-index: 7; pointer-events: none; opacity: 0; background: #fff; }

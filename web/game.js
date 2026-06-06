@@ -264,6 +264,39 @@
   function sfx(n) { if (window.Sound) Sound.sfx(n); }
   function announce(k) { if (window.Sound) Sound.announce(k); }
 
+  const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // ---------- trauma screen shake (shakes #field; chips ride along) ----------
+  let trauma = 0, shakeRAF = 0, shakeT = 0;
+  function addTrauma(amt) {
+    if (reduceMotion || fastMode) return;
+    trauma = Math.min(1, trauma + amt);
+    fieldEl.style.willChange = 'transform';
+    if (!shakeRAF) shakeRAF = requestAnimationFrame(shakeStep);
+  }
+  function shakeStep() {
+    shakeT++;
+    const s = trauma * trauma;                 // trauma² → smooth falloff
+    const n = function (seed) { return 0.5 * Math.sin(shakeT * 0.55 + seed) + 0.5 * Math.sin(shakeT * 0.91 + seed * 2.3); };
+    fieldEl.style.transform = 'translate(' + (8 * s * n(1)).toFixed(1) + 'px,' + (8 * s * n(9)).toFixed(1) + 'px) rotate(' + (1.2 * s * n(17)).toFixed(2) + 'deg)';
+    trauma = Math.max(0, trauma - 0.028);      // ~1.6/sec decay at 60fps
+    if (trauma > 0) shakeRAF = requestAnimationFrame(shakeStep);
+    else { fieldEl.style.transform = ''; fieldEl.style.willChange = ''; shakeRAF = 0; }
+  }
+
+  // ---------- hit-pause + full-frame flash ----------
+  async function hitPause(ms) { if (!fastMode) await sleep(ms); }   // hold the impact frame
+  const flashEl = document.getElementById('flash');
+  function flash(color, alpha, ms) {
+    if (!flashEl) return;
+    flashEl.style.transition = 'none';
+    flashEl.style.background = color;
+    flashEl.style.opacity = String(reduceMotion ? Math.min(alpha, 0.25) : alpha);
+    void flashEl.offsetWidth;
+    flashEl.style.transition = 'opacity ' + ms + 'ms ease-out';
+    flashEl.style.opacity = '0';
+  }
+
   function buildScript(result) {
     const meta = result.meta;
     const sep = meta.sep, caught = meta.caught, intercepted = meta.intercepted, inLane = meta.undercut;
@@ -333,14 +366,15 @@
       placeBall(b[0], b[1]);
       if (t === 5 && !sc.caught && !sc.intercepted && !sc.sacked) ballEl.style.opacity = '0';
       if (sc.captions[t]) tickCaption.textContent = sc.captions[t];
-      if (t === 0) sfx('snap');
+      if (t === 0) { sfx('snap'); addTrauma(0.10); }
       else if (t === 2 && sc.sep >= 2 && !sc.sacked) sfx('open');
-      else if (t === 3 && !sc.sacked) sfx('throw');
+      else if (t === 3 && !sc.sacked) { sfx('throw'); await hitPause(40); }
       else if (t === 4) {
-        if (sc.sacked) sfx('sack');
-        else if (sc.intercepted) sfx('int');
-        else if (sc.caught) sfx('catch');
-        else if (result.outcome === 'pbu') sfx('pbu');
+        if (sc.sacked)           { sfx('sack');  addTrauma(0.55); flash('#e40058', 0.30, 200); }
+        else if (sc.intercepted) { sfx('int');   addTrauma(0.65); flash('#e40058', 0.35, 200); }
+        else if (sc.caught)      { sfx('catch'); addTrauma(0.30); flash('#fcfcfc', 0.50, 160); }
+        else if (result.outcome === 'pbu') { sfx('pbu'); addTrauma(0.35); }
+        await hitPause(110);
       }
       await sleep(t === 0 ? 450 : 680);
     }
@@ -364,7 +398,7 @@
     resultLine.textContent = txt;
     popIn(resultLine);
     buzz(driveResult === 'td' ? [40, 30, 70] : (o === 'interception' || o === 'sack') ? [70] : o === 'completion' ? 12 : 0);
-    if (driveResult === 'td') { sfx('td'); sfx('crowd'); announce('td'); }
+    if (driveResult === 'td') { sfx('td'); sfx('crowd'); announce('td'); addTrauma(0.75); flash('#f8b800', 0.55, 220); }
     else if (o === 'interception') { sfx('crowd'); announce('int'); }
     else if (o === 'sack') { announce('sack'); }
     else if (o === 'completion' && result.meta.sep >= 2) { announce('dime'); }
@@ -471,7 +505,7 @@
     popIn(g);
     buzz(result === 'WIN' ? [60, 40, 60, 40, 90] : result === 'LOSS' ? [120] : [40]);
     sfx(result === 'WIN' ? 'win' : 'loss');
-    if (result === 'WIN') announce('win');
+    if (result === 'WIN') { announce('win'); addTrauma(0.75); }
     setStage('gameover');
   }
 
