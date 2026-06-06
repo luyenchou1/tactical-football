@@ -122,6 +122,7 @@
   let score = 0;
   let drivePlays = 0, driveStartYard = 25;
   let driveOver = false, driveResult = null;   // 'td' | 'downs' | 'int'
+  let firstDownThisPlay = false;
 
   const DRIVES_PER_GAME = 5;
   let drivesPlayed = 0, tdCount = 0, gameOver = false;
@@ -297,6 +298,26 @@
     flashEl.style.opacity = '0';
   }
 
+  // ---------- NBA-Jam SLAM callouts ----------
+  const calloutEl = document.querySelector('.callout');
+  const CALLOUTS = {
+    td:    ['TOUCHDOWN!', 'SIX POINTS!', 'TO THE HOUSE!'],
+    int:   ['PICKED OFF!', 'INTERCEPTED!', 'HE READ IT!'],
+    sack:  ['SACKED!', 'GOT HIM!', 'BURIED!'],
+    dime:  ['DIME!', 'ON THE MONEY!', 'WHAT A READ!'],
+    first: ['FIRST DOWN!', 'MOVE THE CHAINS!'],
+  };
+  const coIdx = {};
+  function callout(kind) {
+    if (!calloutEl || !CALLOUTS[kind]) return;
+    const pool = CALLOUTS[kind];
+    coIdx[kind] = (coIdx[kind] || 0) + 1;
+    calloutEl.textContent = pool[coIdx[kind] % pool.length];
+    calloutEl.className = 'callout ' + kind;
+    void calloutEl.offsetWidth;            // retrigger the slam keyframe
+    calloutEl.classList.add('slam');
+  }
+
   function buildScript(result) {
     const meta = result.meta;
     const sep = meta.sep, caught = meta.caught, intercepted = meta.intercepted, inLane = meta.undercut;
@@ -398,10 +419,11 @@
     resultLine.textContent = txt;
     popIn(resultLine);
     buzz(driveResult === 'td' ? [40, 30, 70] : (o === 'interception' || o === 'sack') ? [70] : o === 'completion' ? 12 : 0);
-    if (driveResult === 'td') { sfx('td'); sfx('crowd'); announce('td'); addTrauma(0.75); flash('#f8b800', 0.55, 220); }
-    else if (o === 'interception') { sfx('crowd'); announce('int'); }
-    else if (o === 'sack') { announce('sack'); }
-    else if (o === 'completion' && result.meta.sep >= 2) { announce('dime'); }
+    if (driveResult === 'td') { sfx('td'); sfx('crowd'); announce('td'); addTrauma(0.75); flash('#f8b800', 0.55, 220); callout('td'); }
+    else if (o === 'interception') { sfx('crowd'); announce('int'); callout('int'); }
+    else if (o === 'sack') { announce('sack'); callout('sack'); }
+    else if (o === 'completion' && result.meta.sep >= 2) { announce('dime'); callout('dime'); }
+    else if (o === 'completion' && firstDownThisPlay) { callout('first'); }
 
     if (driveOver) {
       if (driveResult === 'td')         { driveBanner.className = 'td';       driveBanner.textContent = '🏈 TOUCHDOWN  +7'; }
@@ -432,12 +454,13 @@
   // ---------- drive + scoreboard ----------
   function advanceDown(result) {
     drivePlays += 1;
+    firstDownThisPlay = false;
     if (result.outcome === 'interception') { driveOver = true; driveResult = 'int'; updateHud(); return; }
     const gain = result.yards | 0;                 // negative on a sack
     const nb = Math.max(1, ballOn + gain);         // clamp at our own goal line
     distance -= (nb - ballOn); ballOn = nb;        // distance moves by the ACTUAL change, not the clamped-away nominal
     if (ballOn >= 100) { ballOn = 100; score += 7; tdCount += 1; driveOver = true; driveResult = 'td'; }
-    else if (gain > 0 && distance <= 0) { down = 1; distance = (100 - ballOn <= 10) ? (100 - ballOn) : 10; }
+    else if (gain > 0 && distance <= 0) { down = 1; distance = (100 - ballOn <= 10) ? (100 - ballOn) : 10; firstDownThisPlay = true; }
     else { down += 1; if (down > 4) { driveOver = true; driveResult = 'downs'; } }
     updateHud();
   }
