@@ -125,6 +125,7 @@
   let coverage = 'man';
   const levMap = {};                 // defKey -> 'inside' | 'outside' (man shade)
   let chosenPlay = null, chosenTarget = null;
+  let revealed = false;              // disguise: true once the snap declares the coverage
   let down = 1, distance = 10, ballOn = 25;
   let score = 0;
   let drivePlays = 0, driveStartYard = 25;
@@ -169,7 +170,7 @@
 
   function resetFormation() {
     const shade = {};
-    if (coverage === 'man') {
+    if (revealed && coverage === 'man') {   // leverage is a post-snap tell — hidden while disguised
       MAN_SHADE.forEach(function (e) {
         const rx = baseX[e.chip];
         const sideline = rx < CENTER ? -1 : 1;
@@ -558,6 +559,16 @@
     placeChip('MLB', 27 + t * 0.2, 5.5 + t * 0.5);
   }
 
+  // At the snap the disguised coverage declares itself: the banner flips to the true
+  // call, the man defenders slide to their leverage, and the field flashes.
+  function revealCoverage() {
+    if (revealed) return;
+    revealed = true;
+    updateReadBanner();
+    resetFormation();              // man leverage shade now applies → animated slide
+    flash('#fcfcfc', 0.20, 150);
+  }
+
   // The interactive front half: routes run live, openness reveals, you tap the open
   // man (chip or live-target row) before the rush. Resolves with the chosen target,
   // or null on expiry (→ synthesized sack). Race-safe via the single settle() guard.
@@ -566,7 +577,7 @@
       setStage('reading');
       clearRoutes();
       const pre = buildPreThrow();
-      placeReadTick(pre, 0);
+      revealCoverage();                    // flip the banner + slide defenders to the true look
       ballEl.style.opacity = '1'; placeBall(26.6, -3);
       fieldEl.classList.add('reading');
       sfx('snap'); addTrauma(0.10);
@@ -610,7 +621,7 @@
 
       // routes develop (place at points 1→3)
       [1, 2, 3].forEach(function (p, i) {
-        timers.push(setTimeout(function () { if (!settled) placeReadTick(pre, p); }, 110 + i * 280));
+        timers.push(setTimeout(function () { if (!settled) placeReadTick(pre, p); }, 240 + i * 270));
       });
       // openness lights as each route breaks
       ELIGIBLE.forEach(function (e) {
@@ -805,6 +816,7 @@
     coverage = cr < 0.35 ? 'zone' : cr < 0.55 ? 'blitz' : 'man';   // man 0.45 / zone 0.35 / blitz 0.20
     ['cbX', 'cbZ', 'nb', 'ss', 'mlb'].forEach(function (k) { levMap[k] = Math.random() < 0.5 ? 'outside' : 'inside'; });
     chosenPlay = null; chosenTarget = null;
+    revealed = false;                 // hide the coverage until the snap
     updateReadBanner();
     renderPlayPicker();
     snapBtn.disabled = true;
@@ -848,6 +860,11 @@
   }
 
   function updateReadBanner() {
+    if (!revealed) {
+      readText.innerHTML = 'Defense: <b>? ? ?</b> — diagnose it after the snap';
+      readBanner.dataset.coverage = 'hidden';
+      return;
+    }
     readText.innerHTML = coverage === 'man'
       ? 'Defense: <b>MAN</b> — read each matchup’s leverage'
       : coverage === 'zone'
@@ -857,6 +874,11 @@
   }
 
   function updateHint() {
+    if (!revealed) {
+      hintBox.innerHTML = 'The defense is <b>disguised</b>. Call a play, then <b>snap</b> and read the rotation live — ' +
+        'throw to whoever comes <b>open</b> (green) before the rush gets home.';
+      return;
+    }
     hintBox.innerHTML = coverage === 'man'
       ? 'It’s <b>man</b>. Target a receiver whose route breaks <b>away</b> from his defender’s leverage — ' +
         'or a <b>drag</b>/<b>flat</b> that beats man underneath. Don’t throw a breaking route into the defender’s leverage.'
@@ -926,6 +948,7 @@
   snapBtn.addEventListener('click', async function () {
     if (!chosenPlay) return;
     if (fastMode) {                                   // ?fast: auto-pick the best read, skip the window
+      revealCoverage();
       chosenTarget = bestRead();
       const e = elgByKey[chosenTarget];
       playReveal(Sim.resolvePlay({
