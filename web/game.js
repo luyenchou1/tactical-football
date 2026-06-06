@@ -123,6 +123,7 @@
   let drivePlays = 0, driveStartYard = 25;
   let driveOver = false, driveResult = null;   // 'td' | 'downs' | 'int'
   let firstDownThisPlay = false;
+  let streak = 0, onFire = false;
 
   const DRIVES_PER_GAME = 5;
   let drivesPlayed = 0, tdCount = 0, gameOver = false;
@@ -306,6 +307,8 @@
     sack:  ['SACKED!', 'GOT HIM!', 'BURIED!'],
     dime:  ['DIME!', 'ON THE MONEY!', 'WHAT A READ!'],
     first: ['FIRST DOWN!', 'MOVE THE CHAINS!'],
+    heating: ['HEATING UP...'],
+    fire: ['ON FIRE! 🔥', "HE'S ON FIRE!"],
   };
   const coIdx = {};
   function callout(kind) {
@@ -387,6 +390,13 @@
     }
   }
 
+  // ---------- chip celebrations + on-fire streak ----------
+  function chipFx(id, cls) { const el = chips[id]; if (!el) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function setOnFire(on) {
+    onFire = on;
+    ['X', 'Z', 'SLOT', 'TE', 'RB', 'QB'].forEach(function (id) { if (chips[id]) chips[id].classList.toggle('onfire', on); });
+  }
+
   function buildScript(result) {
     const meta = result.meta;
     const sep = meta.sep, caught = meta.caught, intercepted = meta.intercepted, inLane = meta.undercut;
@@ -434,7 +444,7 @@
         caught ? 'Caught!' : intercepted ? 'Picked off!' : 'Incomplete',
         result.outcome === 'completion' ? 'Tackled after the catch' : '',
       ];
-    return { paths: paths, defAt: defAt, mlbAt: mlbAt, ballAt: ballAt, qbAt: qbAt, captions: captions, caught: caught, intercepted: intercepted, sacked: sacked, sep: sep, catchPt: catchPt };
+    return { paths: paths, defAt: defAt, mlbAt: mlbAt, ballAt: ballAt, qbAt: qbAt, captions: captions, caught: caught, intercepted: intercepted, sacked: sacked, sep: sep, catchPt: catchPt, tgtChip: tgt.chip };
   }
 
   async function playReveal(result) {
@@ -460,9 +470,9 @@
       else if (t === 2 && sc.sep >= 2 && !sc.sacked) sfx('open');
       else if (t === 3 && !sc.sacked) { sfx('throw'); await hitPause(40); }
       else if (t === 4) {
-        if (sc.sacked)           { sfx('sack');  addTrauma(0.55); flash('#e40058', 0.30, 200); burstAt('sack', 26.6, -2); }
+        if (sc.sacked)           { sfx('sack');  addTrauma(0.55); flash('#e40058', 0.30, 200); burstAt('sack', 26.6, -2); chipFx('QB', 'squash'); }
         else if (sc.intercepted) { sfx('int');   addTrauma(0.65); flash('#e40058', 0.35, 200); burstAt('int', sc.catchPt[0], sc.catchPt[1]); }
-        else if (sc.caught)      { sfx('catch'); addTrauma(0.30); flash('#fcfcfc', 0.50, 160); burstAt('catch', sc.catchPt[0], sc.catchPt[1]); }
+        else if (sc.caught)      { sfx('catch'); addTrauma(0.30); flash('#fcfcfc', 0.50, 160); burstAt('catch', sc.catchPt[0], sc.catchPt[1]); chipFx(sc.tgtChip, 'celebrate'); }
         else if (result.outcome === 'pbu') { sfx('pbu'); addTrauma(0.35); }
         await hitPause(110);
       }
@@ -488,11 +498,17 @@
     resultLine.textContent = txt;
     popIn(resultLine);
     buzz(driveResult === 'td' ? [40, 30, 70] : (o === 'interception' || o === 'sack') ? [70] : o === 'completion' ? 12 : 0);
-    if (driveResult === 'td') { sfx('td'); sfx('crowd'); announce('td'); addTrauma(0.75); flash('#f8b800', 0.55, 220); callout('td'); burstAt('td', 26.6, 12); }
-    else if (o === 'interception') { sfx('crowd'); announce('int'); callout('int'); }
-    else if (o === 'sack') { announce('sack'); callout('sack'); }
-    else if (o === 'completion' && result.meta.sep >= 2) { announce('dime'); callout('dime'); }
-    else if (o === 'completion' && firstDownThisPlay) { callout('first'); }
+    if (driveResult === 'td') { sfx('td'); sfx('crowd'); announce('td'); addTrauma(0.75); flash('#f8b800', 0.55, 220); callout('td'); burstAt('td', 26.6, 12); popIn(document.getElementById('hud-score')); }
+    else if (o === 'interception') { sfx('crowd'); announce('int'); callout('int'); streak = 0; setOnFire(false); }
+    else if (o === 'sack') { announce('sack'); callout('sack'); streak = 0; setOnFire(false); }
+    else if (o === 'completion' && result.meta.sep >= 2) {
+      streak++;
+      if (streak >= 3) { setOnFire(true); callout('fire'); announce('fire'); }
+      else if (streak === 2) { callout('heating'); announce('fire'); }
+      else { announce('dime'); callout('dime'); }
+    }
+    else if (o === 'completion') { if (firstDownThisPlay) callout('first'); }
+    else { streak = 0; setOnFire(false); }   // incomplete / pbu breaks the streak
 
     if (driveOver) {
       if (driveResult === 'td')         { driveBanner.className = 'td';       driveBanner.textContent = '🏈 TOUCHDOWN  +7'; }
@@ -560,6 +576,7 @@
     drivesPlayed += 1;
     ballOn = 25; down = 1; distance = 10; driveStartYard = 25;
     drivePlays = 0; driveOver = false; driveResult = null;
+    streak = 0; setOnFire(false);
     newPlay();
   }
   function newGame() {
@@ -573,6 +590,7 @@
     else if (roll < 0.72) { pts = 3; label = 'Field goal'; }
     else                  { pts = 0; label = 'Defense holds — punt'; }
     cpuScore += pts;
+    if (pts > 0) popIn(document.getElementById('hud-score'));
     const rl = document.getElementById('cpu-result');
     rl.textContent = pts > 0 ? (label + '  +' + pts) : label;
     rl.className = pts === 7 ? 'bad' : pts === 3 ? 'neutral' : 'good';

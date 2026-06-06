@@ -344,6 +344,15 @@ html, body {
 #flash { position: absolute; inset: 0; z-index: 7; pointer-events: none; opacity: 0; background: #fff; }
 #fx { position: absolute; inset: 0; z-index: 3; pointer-events: none; }   /* particles: above routes, below chips */
 
+/* chip celebrations + on-fire streak (use the `scale` prop so they compose with the chip's translate) */
+.callout.fire, .callout.heating { color: #ff8a00; }
+.chip.celebrate { animation: chip-pop .42s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes chip-pop { 0% { scale: 1; filter: brightness(2.4); } 35% { scale: 1.4; filter: brightness(1.4); } 100% { scale: 1; filter: brightness(1); } }
+.chip.squash { animation: chip-squash .4s ease-out; }
+@keyframes chip-squash { 0% { scale: 1 1; } 25% { scale: 1.35 .6; } 60% { scale: .9 1.1; } 100% { scale: 1 1; } }
+.chip.onfire { box-shadow: 0 0 8px #ff8a00, 0 0 16px #ff3b00, inset 0 2px 0 rgba(255,255,255,.35), 0 3px 0 rgba(0,0,0,.45); }
+@media (prefers-reduced-motion: reduce) { .chip.celebrate, .chip.squash { animation: none; } }
+
 /* NBA-Jam SLAM callout (over the field) */
 .callout {
   position: absolute; left: 0; right: 0; top: 36%;
