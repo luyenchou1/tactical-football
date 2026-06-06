@@ -531,32 +531,34 @@
 
   // Geometry + read cues for the live window — no result/roll needed yet.
   function buildPreThrow() {
-    const paths = {}, openAt = {}, status = {};
+    const paths = {}, status = {}, openness = {};
     ELIGIBLE.forEach(function (e) {
       const route = chosenPlay.routes[e.key];
       paths[e.chip] = routePath(baseX[e.chip], FORMATION.find(function (f) { return f.id === e.chip; }).y, route);
       const lev = coverage === 'zone' ? null : levMap[e.defKey];
-      status[e.key] = Sim.readStatus(route, coverage, lev);                 // deterministic — matches the breakdown
-      const tt = (Sim.ROUTES[route] || {}).tt || 1.8;
-      openAt[e.key] = Math.round(Math.min(1400, Math.max(300, 200 + (tt - 1.2) * 520)));   // quick routes light early
+      status[e.key] = Sim.readStatus(route, coverage, lev);                 // kept for tuning/cues; not shown as color
+      const st = Sim.expectedSep({ route: route, coverage: coverage, leverage: lev, receiver: P[e.key], defender: P[e.defKey] });
+      openness[e.key] = Math.max(0, Math.min(1, (st - 44) / 40));           // 0 blanketed … 1 wide open (deterministic)
     });
+    // The assigned defender trails the receiver along his route by a gap proportional to
+    // the expected separation — so an open man visibly pulls away and a covered one is glued.
     function defDrop(e, t) {
-      const rp = paths[e.chip][t];
-      if (coverage === 'zone') {
-        return [baseX[e.defChip], FORMATION.find(function (f) { return f.id === e.defChip; }).y + Math.min(t * 0.4, 1.6)];
-      }
-      const beat = 0.8, sideline = baseX[e.chip] < CENTER ? -1 : 1;          // neutral trail (sep unknown pre-throw)
-      return [rp[0] + sideline * Math.min(beat, 2), rp[1] - (0.5 + beat * 0.3)];
+      const pts = paths[e.chip];
+      const i = Math.min(t, 3);
+      const cur = pts[i], prev = pts[Math.max(0, i - 1)];
+      let dx = cur[0] - prev[0], dy = cur[1] - prev[1];
+      const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;            // unit direction of travel
+      const gap = 0.3 + openness[e.key] * 3.6;                               // yards of separation (open man pulls clearly away)
+      return [cur[0] - dx * gap, cur[1] - dy * gap];
     }
-    return { paths: paths, defDrop: defDrop, openAt: openAt, status: status };
+    return { paths: paths, defDrop: defDrop, status: status, openness: openness };
   }
 
   function placeReadTick(pre, t) {
     ELIGIBLE.forEach(function (e) {
       placeChip(e.chip, pre.paths[e.chip][t][0], pre.paths[e.chip][t][1]);
-      if (e.key !== 'rb') { const d = pre.defDrop(e, t); placeChip(e.defChip, d[0], d[1]); }
+      const d = pre.defDrop(e, t); placeChip(e.defChip, d[0], d[1]);   // every receiver's man trails by his gap (incl. RB→MLB)
     });
-    placeChip('MLB', 27 + t * 0.2, 5.5 + t * 0.5);
   }
 
   // At the snap the disguised coverage declares itself: the banner flips to the true
@@ -593,8 +595,9 @@
         fieldEl.classList.remove('reading');
         ELIGIBLE.forEach(function (e) {
           const c = chips[e.chip];
-          if (c) c.classList.remove('tappable', 'open-good', 'open-neutral', 'open-bad');
+          if (c) { c.classList.remove('tappable'); delete c.dataset.postag; }
         });
+        FORMATION.forEach(function (p) { if (chips[p.id]) chips[p.id].classList.remove('faded'); });
         if (pressureFill) { pressureFill.style.transition = 'none'; pressureFill.classList.remove('danger'); }
         if (targetKey) sfx('throw');
         resolve({ targetKey: targetKey });
@@ -608,30 +611,26 @@
       }
       fieldEl.addEventListener('click', onTap, true);
 
-      // live target row (mirrors the field; same settle())
+      // live target row — jersey number ties each button to its chip on the field
       liveTargetsEl.innerHTML = '';
       ELIGIBLE.forEach(function (e) {
+        const num = (FORMATION.find(function (f) { return f.id === e.chip; }) || {}).num;
         const b = document.createElement('button');
         b.className = 'target-btn live'; b.dataset.tkey = e.key;
-        b.innerHTML = '<span class="t-pos">' + e.pos + '</span><span class="t-route">' + cap(chosenPlay.routes[e.key]) + '</span>';
+        b.innerHTML = '<span class="t-num">' + num + '</span><span class="t-pos">' + e.pos + '</span><span class="t-route">' + cap(chosenPlay.routes[e.key]) + '</span>';
         b.addEventListener('click', function () { settle(e.key); });
         liveTargetsEl.appendChild(b);
-        const c = chips[e.chip]; if (c) c.classList.add('tappable');
+        const c = chips[e.chip]; if (c) { c.classList.add('tappable'); c.dataset.postag = e.pos; }
       });
 
-      // routes develop (place at points 1→3)
+      // dim everyone but the 5 receiver↔defender matchups so separation reads clearly
+      const focus = {};
+      ELIGIBLE.forEach(function (e) { focus[e.chip] = 1; focus[e.defChip] = 1; });
+      FORMATION.forEach(function (p) { if (!focus[p.id] && chips[p.id]) chips[p.id].classList.add('faded'); });
+
+      // routes develop (place at points 1→3); openness now reads off the defenders' separation
       [1, 2, 3].forEach(function (p, i) {
         timers.push(setTimeout(function () { if (!settled) placeReadTick(pre, p); }, 240 + i * 270));
-      });
-      // openness lights as each route breaks
-      ELIGIBLE.forEach(function (e) {
-        timers.push(setTimeout(function () {
-          if (settled) return;
-          const c = chips[e.chip]; if (c) c.classList.add('open-' + pre.status[e.key]);
-          const btn = liveTargetsEl.querySelector('[data-tkey="' + e.key + '"]');
-          if (btn) btn.classList.add('v-' + pre.status[e.key]);
-          if (pre.status[e.key] === 'good') sfx('open');
-        }, pre.openAt[e.key]));
       });
       // pressure bar drains over the window
       if (pressureFill) {

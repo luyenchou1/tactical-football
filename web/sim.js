@@ -59,6 +59,17 @@
     return levB > 0 ? 'good' : levB < 0 ? 'bad' : (rt.manBase >= 8 ? 'good' : 'neutral');
   }
 
+  // Deterministic expected separation (the pre-roll sepTarget). DISPLAY-ONLY — drives
+  // the visual gap in the read window. MUST mirror the sepTarget math in resolvePlay().
+  function expectedSep(opts) {
+    const rt = ROUTES[opts.route] || ROUTES.slant;
+    const rec = opts.receiver, defn = opts.defender;
+    if (opts.coverage === 'zone') return 56 + rt.zoneSep + trunc((rec.r.RTE - defn.r.ZON) / 4);
+    const vacated = opts.coverage === 'blitz' ? 8 : 0;
+    return 60 + rt.manBase + levTerm(rt.brk, opts.leverage)
+         + trunc((rec.r.SPD - defn.r.SPD) / 4) + trunc((rec.r.RTE - defn.r.COV) / 2) + vacated;
+  }
+
   // ---------- default demo roster ----------
   const DEFAULT_PLAYERS = {
     x:    { name: 'D. Hart',  num: 80, pos: 'WR', r: { SPD: 89, RTE: 86, CTH: 86, AWR: 82, BTK: 80, STA: 80 } },
@@ -270,7 +281,7 @@
   }
 
   const api = { resolvePlay: resolvePlay, ROUTES: ROUTES, routeDepth: routeDepth,
-                levTerm: levTerm, readStatus: readStatus, DEFAULT_PLAYERS: DEFAULT_PLAYERS };
+                levTerm: levTerm, readStatus: readStatus, expectedSep: expectedSep, DEFAULT_PLAYERS: DEFAULT_PLAYERS };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;   // Node
   else root.Sim = api;                                                         // browser
