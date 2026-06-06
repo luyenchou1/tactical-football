@@ -2,7 +2,7 @@
 
 Turn-based tactical American football for mobile — think **XCOM-meets-football**. You read the defense (man, Cover 3 zone, or blitz), call a play, choose who to throw to, and watch it resolve through a chain of rating-driven dice rolls — with a pass rush pricing every decision.
 
-> **Status:** playable. A 4-play book over 7 routes, 3 defensive looks, a pass rush + sacks, interceptions on forced reads, and a 5-round game vs a CPU opponent. The matchup math runs in two engines (JS + a Python mirror) kept in sync and guarded by a test suite.
+> **Status:** playable, and now juicy. A 4-play book over 7 routes, 3 defensive looks, a pass rush + sacks, interceptions on forced reads, and a 5-round game vs a CPU opponent — wrapped in an arcade audiovisual layer (NES field, procedural 8-bit sound, an announcer, screen shake, confetti, and NBA-Jam-style callouts). The matchup math runs in two engines (JS + a Python mirror) kept in sync and guarded by a test suite.
 
 ## Play it
 
@@ -68,6 +68,16 @@ cd web && npm test                          # engine invariants + calibration & 
 cd web && npm run balance                   # drive-level win-rate per strategy
 ```
 
+## Arcade feel
+
+The whole thing is wrapped in a Tecmo-meets-NBA-Jam audiovisual layer — all procedural, the only assets are two small pixel webfonts:
+
+- **Look:** bright NES grass that fills the frame, chunky flat-token chips, a broadcast HUD, pixel + terminal fonts, a cartridge bezel.
+- **Sound:** 8-bit SFX synthesized with [ZzFX](https://github.com/KilledByAPixel/ZzFX) (snap, throw, catch, sack, pick, touchdown fanfare, crowd) plus a `speechSynthesis` **announcer** on the big beats ("Touchdown!", "Picked off!", "Dime!"). A 🔊/🔇 toggle in the corner; mute is remembered.
+- **Juice:** hit-pause on contact, trauma screen-shake, impact flashes, **SLAM callouts** (TOUCHDOWN! / PICKED OFF! / SACKED! / DIME!), a particle layer (TD confetti, sack dust, INT shards, catch sparks), chip pop/squash, and an **on-fire streak** (three great reads in a drive → 🔥).
+
+It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) and a `?fast` URL flag (skips the reveal for quick play/testing).
+
 ## Roadmap
 
 - [x] One play fully resolved (Quick Slant vs Cover 1 Man), validated math
@@ -80,6 +90,7 @@ cd web && npm run balance                   # drive-level win-rate per strategy
 - [x] Playbook (4 plays, 7 routes) — pick a play and target any of 5 receivers
 - [x] Risk/reward: pass rush + pocket clock (sacks), the blitz, and INTs on forced reads
 - [x] Tuned opponent, a zero-dep Node test harness, and a drive-level balance sim
+- [x] Arcade audiovisual layer: NES re-skin + pixel fonts, procedural sound + announcer, screen shake, particles, SLAM callouts, on-fire streak
 - [x] Read legibility (colored verdicts) + outcome juice (pop + haptics)
 - [ ] Post-snap reads — pick who comes open as the play develops
 - [ ] Disguised coverage — pre-snap tells and bluffs to read
