@@ -126,6 +126,7 @@
   const levMap = {};                 // defKey -> 'inside' | 'outside' (man shade)
   let chosenPlay = null, chosenTarget = null;
   let revealed = false;              // disguise: true once the snap declares the coverage
+  let shownLook = 'man';             // the pre-snap look the defense presents (can bluff the true call)
   let down = 1, distance = 10, ballOn = 25;
   let score = 0;
   let drivePlays = 0, driveStartYard = 25;
@@ -169,8 +170,16 @@
   }
 
   function resetFormation() {
+    const look = revealed ? coverage : shownLook;        // the look the defense is presenting
+    const press = (look === 'man' || look === 'blitz');  // press corners on man/blitz, a cushion on zone
+    const cbY = press ? 1.8 : 6.5;
+    const posOv = {                                      // depth tells for the secondary
+      CB_X: [baseX['CB_X'], cbY], CB_Z: [baseX['CB_Z'], cbY],
+      NB: [baseX['NB'], press ? 2.4 : 6.0], SS: [baseX['SS'], press ? 3.5 : 6.0],
+    };
+    if (look === 'blitz') posOv.SLB = [31, 1.7];         // a linebacker shows pressure in the gap
     const shade = {};
-    if (revealed && coverage === 'man') {   // leverage is a post-snap tell — hidden while disguised
+    if (revealed && coverage === 'man') {                // leverage is a post-snap tell
       MAN_SHADE.forEach(function (e) {
         const rx = baseX[e.chip];
         const sideline = rx < CENTER ? -1 : 1;
@@ -179,7 +188,10 @@
       });
     }
     FORMATION.forEach(function (p) {
-      placeChip(p.id, shade[p.id] !== undefined ? shade[p.id] : p.x, p.y);
+      let x = posOv[p.id] ? posOv[p.id][0] : p.x;
+      const y = posOv[p.id] ? posOv[p.id][1] : p.y;
+      if (shade[p.id] !== undefined) x = shade[p.id];    // man leverage shade overrides x
+      placeChip(p.id, x, y);
       chips[p.id].classList.remove('primary');
     });
     ballEl.style.opacity = '0';
@@ -814,6 +826,13 @@
     const cr = Math.random();
     coverage = cr < 0.35 ? 'zone' : cr < 0.55 ? 'blitz' : 'man';   // man 0.45 / zone 0.35 / blitz 0.20
     ['cbX', 'cbZ', 'nb', 'ss', 'mlb'].forEach(function (k) { levMap[k] = Math.random() < 0.5 ? 'outside' : 'inside'; });
+    // pre-snap tell: the shown look usually matches the true call, but ~1 in 4 it bluffs
+    if (Math.random() < 0.25) {
+      const others = ['man', 'zone', 'blitz'].filter(function (l) { return l !== coverage; });
+      shownLook = others[Math.floor(Math.random() * others.length)];
+    } else {
+      shownLook = coverage;
+    }
     chosenPlay = null; chosenTarget = null;
     revealed = false;                 // hide the coverage until the snap
     updateReadBanner();
@@ -860,7 +879,7 @@
 
   function updateReadBanner() {
     if (!revealed) {
-      readText.innerHTML = 'Defense: <b>? ? ?</b> — diagnose it after the snap';
+      readText.innerHTML = 'Defense: <b>? ? ?</b> — read the alignment, then snap';
       readBanner.dataset.coverage = 'hidden';
       return;
     }
@@ -874,8 +893,9 @@
 
   function updateHint() {
     if (!revealed) {
-      hintBox.innerHTML = 'The defense is <b>disguised</b>. Call a play, then <b>snap</b> and read the rotation live — ' +
-        'throw to whoever comes <b>open</b> (green) before the rush gets home.';
+      hintBox.innerHTML = '<b>Read the look:</b> <b>press</b> corners (tight on the receivers) hint man, ' +
+        '<b>off</b> corners (a cushion) hint zone, and a <b>linebacker creeping</b> the line hints blitz. ' +
+        'The defense can <b>disguise</b> — confirm after the snap, then throw to whoever wins his matchup before the rush gets home.';
       return;
     }
     hintBox.innerHTML = coverage === 'man'
