@@ -187,33 +187,48 @@
   function clearRoutes() {
     routesSvg.querySelectorAll('polyline').forEach(function (n) { n.remove(); });
   }
-  function drawPolyline(pts, color, faint) {
+  function addLine(ptsStr, stroke, width, opacity) {
     const el = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    el.setAttribute('points', pts.map(function (p) { return toLeft(p[0]) + ',' + toTop(p[1]); }).join(' '));
+    el.setAttribute('points', ptsStr);
     el.setAttribute('fill', 'none');
-    el.setAttribute('stroke', color);
-    el.setAttribute('stroke-width', faint ? '0.8' : '1.6');
+    el.setAttribute('stroke', stroke);
+    el.setAttribute('stroke-width', width);
     el.setAttribute('stroke-linejoin', 'round');
     el.setAttribute('stroke-linecap', 'round');
     el.setAttribute('vector-effect', 'non-scaling-stroke');
-    if (faint) { el.setAttribute('opacity', '0.5'); el.setAttribute('marker-end', 'url(#arrow-faint)'); el.style.color = 'rgba(255,255,255,0.35)'; }
-    else { el.setAttribute('marker-end', 'url(#arrow)'); el.style.color = color; }
+    el.setAttribute('opacity', opacity);
+    el.setAttribute('marker-end', 'url(#arrow)');
+    el.style.color = stroke;                          // currentColor feeds the arrowhead
     routesSvg.appendChild(el);
+    return el;
+  }
+  // Each route is a dark casing + a bold bright line on top, so the path reads
+  // at high contrast over both the grass and the player chips.
+  function drawPolyline(pts, color, faint) {
+    const ptsStr = pts.map(function (p) { return toLeft(p[0]) + ',' + toTop(p[1]); }).join(' ');
+    const mainW = faint ? 3 : 5;
+    const caseW = faint ? 5.5 : 8;
+    const mainColor = faint ? '#ffffff' : color;
+    addLine(ptsStr, 'rgba(0,0,0,0.62)', caseW, faint ? 0.7 : 0.88);   // dark casing underneath
+    const main = addLine(ptsStr, mainColor, mainW, faint ? 0.9 : 1);   // bright line on top
+    if (!faint) main.style.filter = 'drop-shadow(0 0 2.5px ' + color + ')';
+    return main;
   }
   function drawPlayRoutes() {
     clearRoutes();
     if (!chosenPlay) return;
+    let tgt = null;
     ELIGIBLE.forEach(function (e) {
       const pts = routePath(baseX[e.chip], FORMATION.find(function (f) { return f.id === e.chip; }).y, chosenPlay.routes[e.key]);
-      const isTgt = (e.key === chosenTarget);
-      let color = 'rgba(255,255,255,0.45)';
-      if (isTgt) {
-        const lev = coverage === 'zone' ? null : levMap[e.defKey];
-        const q = Sim.readStatus(chosenPlay.routes[e.key], coverage, lev);
-        color = q === 'good' ? '#46c46a' : q === 'bad' ? '#e8543e' : '#f2c200';
-      }
-      drawPolyline(pts, color, !isTgt);
+      if (e.key === chosenTarget) { tgt = { pts: pts, e: e }; return; }  // draw target last, on top
+      drawPolyline(pts, null, true);                                     // non-target: bright white
     });
+    if (tgt) {
+      const lev = coverage === 'zone' ? null : levMap[tgt.e.defKey];
+      const q = Sim.readStatus(chosenPlay.routes[tgt.e.key], coverage, lev);
+      const color = q === 'good' ? '#22e34d' : q === 'bad' ? '#ff4133' : '#ffd21e';
+      drawPolyline(tgt.pts, color, false);                              // target: thick, vivid, glowing
+    }
   }
 
   // ---------- player stat card ----------
