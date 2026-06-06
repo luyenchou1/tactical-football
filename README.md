@@ -72,8 +72,8 @@ cd web && npm run balance                   # drive-level win-rate per strategy
 
 The whole thing is wrapped in a Tecmo-meets-NBA-Jam audiovisual layer — all procedural, the only assets are two small pixel webfonts:
 
-- **Look:** bright NES grass that fills the frame, chunky flat-token chips, a broadcast HUD, pixel + terminal fonts, a cartridge bezel.
-- **Sound:** 8-bit SFX synthesized with [ZzFX](https://github.com/KilledByAPixel/ZzFX) (snap, throw, catch, sack, pick, touchdown fanfare, crowd) plus a `speechSynthesis` **announcer** on the big beats ("Touchdown!", "Picked off!", "Dime!"). A 🔊/🔇 toggle in the corner; mute is remembered.
+- **Look:** bright NES grass that fills the frame, painted yard numbers, chunky flat-token chips, a broadcast HUD, pixel + terminal fonts, a cartridge bezel, and a subtle CRT scanline + vignette finish.
+- **Sound:** 8-bit SFX synthesized with [ZzFX](https://github.com/KilledByAPixel/ZzFX) (snap, throw, catch, sack, pick, touchdown fanfare, crowd) plus a `speechSynthesis` **announcer** on the big beats ("Touchdown!", "Picked off!", "Dime!"), over a gentle procedural menu-music loop that plays while you read the defense and ducks for the snap. A 🔊/🔇 toggle in the corner; mute is remembered.
 - **Juice:** hit-pause on contact, trauma screen-shake, impact flashes, **SLAM callouts** (TOUCHDOWN! / PICKED OFF! / SACKED! / DIME!), a particle layer (TD confetti, sack dust, INT shards, catch sparks), chip pop/squash, and an **on-fire streak** (three great reads in a drive → 🔥).
 
 It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) and a `?fast` URL flag (skips the reveal for quick play/testing).
@@ -90,7 +90,7 @@ It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) a
 - [x] Playbook (4 plays, 7 routes) — pick a play and target any of 5 receivers
 - [x] Risk/reward: pass rush + pocket clock (sacks), the blitz, and INTs on forced reads
 - [x] Tuned opponent, a zero-dep Node test harness, and a drive-level balance sim
-- [x] Arcade audiovisual layer: NES re-skin + pixel fonts, procedural sound + announcer, screen shake, particles, SLAM callouts, on-fire streak
+- [x] Arcade audiovisual layer: NES re-skin + pixel fonts, procedural sound + announcer + menu music, screen shake, particles, SLAM callouts, on-fire streak, painted field + CRT finish
 - [x] Read legibility (colored verdicts) + outcome juice (pop + haptics)
 - [ ] Post-snap reads — pick who comes open as the play develops
 - [ ] Disguised coverage — pre-snap tells and bluffs to read

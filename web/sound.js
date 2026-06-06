@@ -102,6 +102,7 @@
     muted = !!m;
     try { localStorage.setItem('tf-sound', muted ? 'off' : 'on'); } catch (e) {}
     if (muted && hasSpeech) { try { speechSynthesis.cancel(); } catch (e) {} }
+    if (muted) musicStop();
     return muted;
   }
   function isMuted() { return muted; }
@@ -115,5 +116,17 @@
     if (!document.hidden && unlocked) { try { if (zzfxX.state !== 'running') zzfxX.resume(); } catch (e) {} }
   });
 
-  root.Sound = { sfx: sfx, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock };
+  // ---------- minimal menu music (procedural — a gentle loop that ducks during the reveal) ----------
+  var MUSIC = [220, 262, 330, 262, 196, 247, 294, 247];   // soft Am↔G arpeggio
+  var mStep = 0, mTimer = 0;
+  var NOTE = [0.05, .02, 0, .01, .08, .12, 1, .8];        // low-volume triangle pluck
+  function musicNote() {
+    if (muted || typeof zzfx === 'undefined') return;
+    try { var p = NOTE.slice(); p[2] = MUSIC[mStep % MUSIC.length]; p[17] = .35; p[18] = .03; zzfx.apply(null, p); } catch (e) {}
+    mStep++;
+  }
+  function musicStart() { if (mTimer || muted) return; ensureUnlock(); musicNote(); mTimer = setInterval(musicNote, 300); }
+  function musicStop() { if (mTimer) { clearInterval(mTimer); mTimer = 0; } }
+
+  root.Sound = { sfx: sfx, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, musicStart: musicStart, musicStop: musicStop };
 })(window);

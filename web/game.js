@@ -109,6 +109,7 @@
   const readBanner = document.getElementById('read-banner');
   const driveBanner = document.getElementById('drive-banner');
   const endzoneEl = document.getElementById('endzone');
+  const yardNumsEl = document.getElementById('yardnums');
   const playPickerEl = document.getElementById('play-picker');
   const targetPickerEl = document.getElementById('target-picker');
   const targetLabel = document.getElementById('target-label');
@@ -569,6 +570,8 @@
 
   function setStage(name) {
     Object.keys(panel).forEach(function (k) { panel[k].classList.toggle('hidden', k !== name); });
+    // menu music plays only while you're reading the defense; it ducks for the reveal
+    if (window.Sound) { if (name === 'presnap') Sound.musicStart(); else Sound.musicStop(); }
   }
 
   // ---------- new drive / new play ----------
@@ -648,6 +651,21 @@
     if (endzoneEl) {
       if (goalYd <= FIELD.maxY) { endzoneEl.style.display = 'block'; endzoneEl.style.height = toTop(goalYd) + '%'; }
       else endzoneEl.style.display = 'none';
+    }
+    // painted yard numbers — decorative field texture, accurate to the ball's position
+    if (yardNumsEl) {
+      yardNumsEl.innerHTML = '';
+      for (let a = 10; a <= 90; a += 10) {
+        const relY = a - ballOn;
+        if (relY < FIELD.minY + 1.5 || relY > FIELD.maxY - 1.5) continue;
+        const n = a <= 50 ? a : 100 - a;
+        ['19', '81'].forEach(function (xp, idx) {
+          const s = document.createElement('span');
+          s.className = 'yardnum' + (idx ? ' flip' : '');
+          s.textContent = n; s.style.left = xp + '%'; s.style.top = toTop(relY) + '%';
+          yardNumsEl.appendChild(s);
+        });
+      }
     }
   }
 
