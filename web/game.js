@@ -318,6 +318,75 @@
     calloutEl.classList.add('slam');
   }
 
+  // ---------- pooled particle FX (one canvas over the field, GC-free) ----------
+  const fxCanvas = document.getElementById('fx');
+  const fxCtx = fxCanvas ? fxCanvas.getContext('2d') : null;
+  let fxW = 0, fxH = 0, fxRAF = 0;
+  const POOL = [];
+  for (let i = 0; i < 150; i++) POOL.push({ alive: false });
+
+  function fxResize() {
+    if (!fxCtx) return;
+    const r = fieldEl.getBoundingClientRect();
+    if (!r.width) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);   // 3x retina triples fill for no gain
+    fxW = r.width; fxH = r.height;
+    fxCanvas.width = Math.round(fxW * dpr); fxCanvas.height = Math.round(fxH * dpr);
+    fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', fxResize);
+
+  function fxSpawn(n, x, y, o) {
+    if (reduceMotion || fastMode || !fxCtx) return;
+    if (!fxW) fxResize();
+    for (let i = 0, s = 0; i < POOL.length && s < n; i++) {
+      const p = POOL[i]; if (p.alive) continue; s++;
+      p.alive = true;
+      if (o.rain) { p.x = Math.random() * fxW; p.y = -8; p.vx = (Math.random() - .5) * 1.5; p.vy = 1 + Math.random() * 2; }
+      else {
+        const ang = o.up ? (-Math.PI / 2 + (Math.random() - .5) * (o.spread || 1.4)) : Math.random() * 6.283;
+        const sp = o.spdMin + Math.random() * (o.spdMax - o.spdMin);
+        p.x = x; p.y = y; p.vx = Math.cos(ang) * sp; p.vy = Math.sin(ang) * sp - (o.up ? (o.lift || 0) : 0);
+      }
+      p.g = o.g; p.drag = o.drag; p.life = p.maxLife = o.life * (.7 + Math.random() * .6);
+      p.size = o.size * (.6 + Math.random() * .8); p.rot = Math.random() * 6.283; p.vr = (Math.random() - .5) * .4;
+      p.color = o.colors[(Math.random() * o.colors.length) | 0];
+    }
+    if (!fxRAF) fxRAF = requestAnimationFrame(fxStep);
+  }
+
+  function fxStep() {
+    fxCtx.clearRect(0, 0, fxW, fxH);
+    let any = false;
+    for (let i = 0; i < POOL.length; i++) {
+      const p = POOL[i]; if (!p.alive) continue; any = true;
+      p.vx *= p.drag; p.vy = p.vy * p.drag + p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.life--;
+      if (p.life <= 0 || p.y > fxH + 20) { p.alive = false; continue; }
+      fxCtx.globalAlpha = Math.max(0, p.life / p.maxLife);
+      fxCtx.save(); fxCtx.translate(p.x, p.y); fxCtx.rotate(p.rot);
+      fxCtx.fillStyle = p.color; fxCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 1.4); fxCtx.restore();
+    }
+    fxCtx.globalAlpha = 1;
+    if (any) fxRAF = requestAnimationFrame(fxStep);
+    else { fxCtx.clearRect(0, 0, fxW, fxH); fxRAF = 0; }   // idle-stop when none alive
+  }
+
+  function burstAt(kind, yx, yy) {
+    if (!fxCtx) return;
+    if (!fxW) fxResize();
+    const x = toLeft(yx) / 100 * fxW, y = toTop(yy) / 100 * fxH;
+    if (kind === 'td') {
+      fxSpawn(70, x, y, { up: true, spread: 1.7, lift: 3, spdMin: 2, spdMax: 6, g: .18, drag: .96, life: 70, size: 6, colors: ['#f8b800', '#f8d878', '#0078f8', '#fcfcfc'] });
+      fxSpawn(45, 0, 0, { rain: true, g: .12, drag: .99, life: 95, size: 6, colors: ['#f8b800', '#0078f8', '#f83800', '#fcfcfc'] });
+    } else if (kind === 'sack') {
+      fxSpawn(16, x, y, { up: false, spdMin: 1, spdMax: 3, g: .22, drag: .9, life: 34, size: 5, colors: ['#6b5030', '#8a6a40', '#3a2e1c'] });
+    } else if (kind === 'int') {
+      fxSpawn(22, x, y, { up: false, spdMin: 2, spdMax: 5, g: .2, drag: .92, life: 42, size: 5, colors: ['#e40058', '#ff5a3c', '#fcfcfc'] });
+    } else if (kind === 'catch') {
+      fxSpawn(15, x, y, { up: false, spdMin: 1.5, spdMax: 3.5, g: .2, drag: .92, life: 28, size: 4, colors: ['#46ff7a', '#00b800', '#fcfcfc'] });
+    }
+  }
+
   function buildScript(result) {
     const meta = result.meta;
     const sep = meta.sep, caught = meta.caught, intercepted = meta.intercepted, inLane = meta.undercut;
@@ -365,7 +434,7 @@
         caught ? 'Caught!' : intercepted ? 'Picked off!' : 'Incomplete',
         result.outcome === 'completion' ? 'Tackled after the catch' : '',
       ];
-    return { paths: paths, defAt: defAt, mlbAt: mlbAt, ballAt: ballAt, qbAt: qbAt, captions: captions, caught: caught, intercepted: intercepted, sacked: sacked, sep: sep };
+    return { paths: paths, defAt: defAt, mlbAt: mlbAt, ballAt: ballAt, qbAt: qbAt, captions: captions, caught: caught, intercepted: intercepted, sacked: sacked, sep: sep, catchPt: catchPt };
   }
 
   async function playReveal(result) {
@@ -391,9 +460,9 @@
       else if (t === 2 && sc.sep >= 2 && !sc.sacked) sfx('open');
       else if (t === 3 && !sc.sacked) { sfx('throw'); await hitPause(40); }
       else if (t === 4) {
-        if (sc.sacked)           { sfx('sack');  addTrauma(0.55); flash('#e40058', 0.30, 200); }
-        else if (sc.intercepted) { sfx('int');   addTrauma(0.65); flash('#e40058', 0.35, 200); }
-        else if (sc.caught)      { sfx('catch'); addTrauma(0.30); flash('#fcfcfc', 0.50, 160); }
+        if (sc.sacked)           { sfx('sack');  addTrauma(0.55); flash('#e40058', 0.30, 200); burstAt('sack', 26.6, -2); }
+        else if (sc.intercepted) { sfx('int');   addTrauma(0.65); flash('#e40058', 0.35, 200); burstAt('int', sc.catchPt[0], sc.catchPt[1]); }
+        else if (sc.caught)      { sfx('catch'); addTrauma(0.30); flash('#fcfcfc', 0.50, 160); burstAt('catch', sc.catchPt[0], sc.catchPt[1]); }
         else if (result.outcome === 'pbu') { sfx('pbu'); addTrauma(0.35); }
         await hitPause(110);
       }
@@ -419,7 +488,7 @@
     resultLine.textContent = txt;
     popIn(resultLine);
     buzz(driveResult === 'td' ? [40, 30, 70] : (o === 'interception' || o === 'sack') ? [70] : o === 'completion' ? 12 : 0);
-    if (driveResult === 'td') { sfx('td'); sfx('crowd'); announce('td'); addTrauma(0.75); flash('#f8b800', 0.55, 220); callout('td'); }
+    if (driveResult === 'td') { sfx('td'); sfx('crowd'); announce('td'); addTrauma(0.75); flash('#f8b800', 0.55, 220); callout('td'); burstAt('td', 26.6, 12); }
     else if (o === 'interception') { sfx('crowd'); announce('int'); callout('int'); }
     else if (o === 'sack') { announce('sack'); callout('sack'); }
     else if (o === 'completion' && result.meta.sep >= 2) { announce('dime'); callout('dime'); }
@@ -679,5 +748,6 @@
 
   // ---------- boot ----------
   buildChips();
+  fxResize();
   startDrive();
 })();
