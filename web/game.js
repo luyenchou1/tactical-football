@@ -98,6 +98,7 @@
     postplay: document.getElementById('postplay'),
     cpu: document.getElementById('cpu'),
     gameover: document.getElementById('gameover'),
+    reading: document.getElementById('reading'),
   };
   const tickCaption = document.getElementById('tick-caption');
   const resultLine = document.getElementById('result-line');
@@ -116,6 +117,8 @@
   const playPickerEl = document.getElementById('play-picker');
   const targetPickerEl = document.getElementById('target-picker');
   const targetLabel = document.getElementById('target-label');
+  const liveTargetsEl = document.getElementById('live-targets');
+  const pressureFill = document.getElementById('pressure-fill');
 
   // ---------- game state ----------
   const chips = {};
@@ -140,6 +143,7 @@
     FORMATION.forEach(function (p) {
       const el = document.createElement('div');
       el.className = 'chip ' + p.team + (p.simKey ? ' key' : '');
+      el.dataset.id = p.id;
       el.textContent = p.num;
       el.addEventListener('click', function (e) { e.stopPropagation(); showCard(p); });
       fieldEl.appendChild(el);
@@ -424,7 +428,7 @@
     ELIGIBLE.forEach(function (e) {
       paths[e.chip] = routePath(baseX[e.chip], FORMATION.find(function (f) { return f.id === e.chip; }).y, chosenPlay.routes[e.key]);
     });
-    const tgt = elgByKey[targetKey];
+    const tgt = elgByKey[targetKey] || ELIGIBLE[0];   // fallback for the synth-sack (target unused on a sack)
     const catchPt = paths[tgt.chip][3];
     // Who actually plays the ball: the MLB when it jumps the lane (or covers the RB underneath),
     // otherwise the target's own man defender. Drives the INT/PBU ball path + MLB converge.
@@ -519,6 +523,142 @@
     }
     await sleep(420);
     showResult(result);
+  }
+
+  // ---------- post-snap read window ----------
+  const READ_WINDOW_MS = 2500;   // forgiving: time to scan and decide before the rush
+
+  // Geometry + read cues for the live window — no result/roll needed yet.
+  function buildPreThrow() {
+    const paths = {}, openAt = {}, status = {};
+    ELIGIBLE.forEach(function (e) {
+      const route = chosenPlay.routes[e.key];
+      paths[e.chip] = routePath(baseX[e.chip], FORMATION.find(function (f) { return f.id === e.chip; }).y, route);
+      const lev = coverage === 'zone' ? null : levMap[e.defKey];
+      status[e.key] = Sim.readStatus(route, coverage, lev);                 // deterministic — matches the breakdown
+      const tt = (Sim.ROUTES[route] || {}).tt || 1.8;
+      openAt[e.key] = Math.round(Math.min(1400, Math.max(300, 200 + (tt - 1.2) * 520)));   // quick routes light early
+    });
+    function defDrop(e, t) {
+      const rp = paths[e.chip][t];
+      if (coverage === 'zone') {
+        return [baseX[e.defChip], FORMATION.find(function (f) { return f.id === e.defChip; }).y + Math.min(t * 0.4, 1.6)];
+      }
+      const beat = 0.8, sideline = baseX[e.chip] < CENTER ? -1 : 1;          // neutral trail (sep unknown pre-throw)
+      return [rp[0] + sideline * Math.min(beat, 2), rp[1] - (0.5 + beat * 0.3)];
+    }
+    return { paths: paths, defDrop: defDrop, openAt: openAt, status: status };
+  }
+
+  function placeReadTick(pre, t) {
+    ELIGIBLE.forEach(function (e) {
+      placeChip(e.chip, pre.paths[e.chip][t][0], pre.paths[e.chip][t][1]);
+      if (e.key !== 'rb') { const d = pre.defDrop(e, t); placeChip(e.defChip, d[0], d[1]); }
+    });
+    placeChip('MLB', 27 + t * 0.2, 5.5 + t * 0.5);
+  }
+
+  // The interactive front half: routes run live, openness reveals, you tap the open
+  // man (chip or live-target row) before the rush. Resolves with the chosen target,
+  // or null on expiry (→ synthesized sack). Race-safe via the single settle() guard.
+  function runReadWindow() {
+    return new Promise(function (resolve) {
+      setStage('reading');
+      clearRoutes();
+      const pre = buildPreThrow();
+      placeReadTick(pre, 0);
+      ballEl.style.opacity = '1'; placeBall(26.6, -3);
+      fieldEl.classList.add('reading');
+      sfx('snap'); addTrauma(0.10);
+
+      const timers = [];
+      let settled = false;
+
+      function settle(targetKey) {
+        if (settled) return;
+        settled = true;
+        timers.forEach(clearTimeout);
+        fieldEl.removeEventListener('click', onTap, true);
+        fieldEl.classList.remove('reading');
+        ELIGIBLE.forEach(function (e) {
+          const c = chips[e.chip];
+          if (c) c.classList.remove('tappable', 'open-good', 'open-neutral', 'open-bad');
+        });
+        if (pressureFill) { pressureFill.style.transition = 'none'; pressureFill.classList.remove('danger'); }
+        if (targetKey) sfx('throw');
+        resolve({ targetKey: targetKey });
+      }
+      function onTap(ev) {
+        const chip = ev.target.closest ? ev.target.closest('.chip') : null;
+        if (!chip) return;
+        ev.stopImmediatePropagation();                  // suppress the stat card during the read
+        const e = ELIGIBLE.find(function (x) { return x.chip === chip.dataset.id; });
+        if (e) settle(e.key);
+      }
+      fieldEl.addEventListener('click', onTap, true);
+
+      // live target row (mirrors the field; same settle())
+      liveTargetsEl.innerHTML = '';
+      ELIGIBLE.forEach(function (e) {
+        const b = document.createElement('button');
+        b.className = 'target-btn live'; b.dataset.tkey = e.key;
+        b.innerHTML = '<span class="t-pos">' + e.pos + '</span><span class="t-route">' + cap(chosenPlay.routes[e.key]) + '</span>';
+        b.addEventListener('click', function () { settle(e.key); });
+        liveTargetsEl.appendChild(b);
+        const c = chips[e.chip]; if (c) c.classList.add('tappable');
+      });
+
+      // routes develop (place at points 1→3)
+      [1, 2, 3].forEach(function (p, i) {
+        timers.push(setTimeout(function () { if (!settled) placeReadTick(pre, p); }, 110 + i * 280));
+      });
+      // openness lights as each route breaks
+      ELIGIBLE.forEach(function (e) {
+        timers.push(setTimeout(function () {
+          if (settled) return;
+          const c = chips[e.chip]; if (c) c.classList.add('open-' + pre.status[e.key]);
+          const btn = liveTargetsEl.querySelector('[data-tkey="' + e.key + '"]');
+          if (btn) btn.classList.add('v-' + pre.status[e.key]);
+          if (pre.status[e.key] === 'good') sfx('open');
+        }, pre.openAt[e.key]));
+      });
+      // pressure bar drains over the window
+      if (pressureFill) {
+        pressureFill.style.transition = 'none'; pressureFill.style.width = '100%'; pressureFill.classList.remove('danger');
+        timers.push(setTimeout(function () { pressureFill.style.transition = 'width ' + READ_WINDOW_MS + 'ms linear'; pressureFill.style.width = '0%'; }, 30));
+        timers.push(setTimeout(function () { if (!settled) pressureFill.classList.add('danger'); }, Math.round(READ_WINDOW_MS * 0.62)));
+      }
+      // expiry → sack
+      timers.push(setTimeout(function () { settle(null); }, READ_WINDOW_MS));
+    });
+  }
+
+  // Best read for the ?fast path (mirrors drivesim's smart strategy): best status,
+  // deeper route as the tie-break.
+  function bestRead() {
+    const rank = { good: 2, neutral: 1, bad: 0 };
+    let best = ELIGIBLE[0].key, bestScore = -1;
+    ELIGIBLE.forEach(function (e) {
+      const route = chosenPlay.routes[e.key];
+      const lev = coverage === 'zone' ? null : levMap[e.defKey];
+      const score = rank[Sim.readStatus(route, coverage, lev)] * 100 + ((Sim.ROUTES[route] || {}).depth || 0);
+      if (score > bestScore) { bestScore = score; best = e.key; }
+    });
+    return best;
+  }
+
+  // Window expired with no throw — synthesize a sack that flows through finishReveal /
+  // showResult / advanceDown exactly like an engine sack (no resolvePlay call).
+  function synthSack() {
+    const yards = -(4 + Math.floor(Math.random() * 5));   // -4..-8
+    return {
+      outcome: 'sack', yards: yards,
+      chain: [{ key: 'pressure', label: 'Pass rush', status: 'bad', value: 'SACK',
+        detail: 'Held the ball too long — the rush got home before anyone came open.',
+        math: 'no throw before the pocket collapsed' }],
+      meta: { route: '(no throw)', coverage: coverage, leverage: null, receiver: '',
+        sep: 0, window: 0, caught: false, intercepted: false, sacked: true, hurried: false, undercut: false },
+    };
   }
 
   // ---------- result / breakdown ----------
@@ -746,10 +886,9 @@
     sfx('ui');
     chosenPlay = pl; chosenTarget = null;
     document.querySelectorAll('.play-btn').forEach(function (b) { b.classList.toggle('selected', b.dataset.play === pl.id); });
-    renderTargetPicker();
     resetFormation();
     drawPlayRoutes();
-    snapBtn.disabled = true;
+    snapBtn.disabled = false;   // the target is now chosen post-snap, in the read window
   }
 
   function renderTargetPicker() {
@@ -784,14 +923,30 @@
     const on = hintBox.classList.toggle('hidden') === false;
     hintBtn.setAttribute('aria-pressed', String(on));
   });
-  snapBtn.addEventListener('click', function () {
-    if (!chosenPlay || !chosenTarget) return;
-    const e = elgByKey[chosenTarget];
-    const result = Sim.resolvePlay({
-      route: chosenPlay.routes[chosenTarget], coverage: coverage, leverage: levMap[e.defKey],
-      receiver: P[e.key], defender: P[e.defKey], lb: P.mlb, qb: P.qb,
-    });
-    playReveal(result);
+  snapBtn.addEventListener('click', async function () {
+    if (!chosenPlay) return;
+    if (fastMode) {                                   // ?fast: auto-pick the best read, skip the window
+      chosenTarget = bestRead();
+      const e = elgByKey[chosenTarget];
+      playReveal(Sim.resolvePlay({
+        route: chosenPlay.routes[chosenTarget], coverage: coverage, leverage: levMap[e.defKey],
+        receiver: P[e.key], defender: P[e.defKey], lb: P.mlb, qb: P.qb,
+      }));
+      return;
+    }
+    const choice = await runReadWindow();
+    const targetKey = choice.targetKey;
+    let result;
+    if (targetKey) {
+      const e = elgByKey[targetKey];
+      result = Sim.resolvePlay({
+        route: chosenPlay.routes[targetKey], coverage: coverage, leverage: levMap[e.defKey],
+        receiver: P[e.key], defender: P[e.defKey], lb: P.mlb, qb: P.qb,
+      });
+    } else {
+      result = synthSack();
+    }
+    await finishReveal(result, targetKey);
   });
   nextBtn.addEventListener('click', function () {
     sfx('ui');

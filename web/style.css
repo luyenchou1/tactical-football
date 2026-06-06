@@ -397,3 +397,23 @@ html, body {
 
 /* safe-area: keep the action buttons clear of the home indicator / gesture bar */
 #panel { padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
+
+/* ---------- post-snap read window ---------- */
+#reading { gap: 12px; }
+#read-window-title { font-family: var(--font-arcade); font-size: 9px; line-height: 1.5; color: var(--star); text-align: center; letter-spacing: .5px; }
+#pressure-bar { height: 14px; border: 2px solid #000; border-radius: 7px; background: #0a0a0a; overflow: hidden; box-shadow: inset 0 2px 3px rgba(0, 0, 0, .55); }
+#pressure-fill { height: 100%; width: 100%; border-radius: 5px; background: linear-gradient(90deg, #00b800, #ffd21e); }
+#pressure-fill.danger { background: linear-gradient(90deg, #ff8a00, #ff3b00); }
+#live-targets { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.target-btn.live { min-height: 56px; }
+
+/* tappable receivers + openness rings during the read */
+#field.reading .chip { transition: left .26s linear, top .26s linear, scale .18s ease; }
+.chip.tappable { cursor: pointer; }
+.chip.open-good    { box-shadow: 0 0 0 3px #22e34d, 0 0 12px #22e34d, 0 3px 0 rgba(0, 0, 0, .5); z-index: 6; }
+.chip.open-neutral { box-shadow: 0 0 0 3px #ffd21e, 0 0 10px #ffd21e, 0 3px 0 rgba(0, 0, 0, .5); z-index: 6; }
+.chip.open-bad     { box-shadow: 0 0 0 3px #ff4133, 0 0 8px  #ff4133, 0 3px 0 rgba(0, 0, 0, .5); }
+@media (prefers-reduced-motion: reduce) {
+  #field.reading .chip { transition: none; }
+  #pressure-fill { transition: none !important; }
+}
