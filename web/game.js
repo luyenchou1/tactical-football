@@ -416,18 +416,19 @@
     ['X', 'Z', 'SLOT', 'TE', 'RB', 'QB'].forEach(function (id) { if (chips[id]) chips[id].classList.toggle('onfire', on); });
   }
 
-  function buildScript(result) {
+  function buildScript(result, targetKey) {
+    targetKey = targetKey || chosenTarget;
     const meta = result.meta;
     const sep = meta.sep, caught = meta.caught, intercepted = meta.intercepted, inLane = meta.undercut;
     const paths = {};
     ELIGIBLE.forEach(function (e) {
       paths[e.chip] = routePath(baseX[e.chip], FORMATION.find(function (f) { return f.id === e.chip; }).y, chosenPlay.routes[e.key]);
     });
-    const tgt = elgByKey[chosenTarget];
+    const tgt = elgByKey[targetKey];
     const catchPt = paths[tgt.chip][3];
     // Who actually plays the ball: the MLB when it jumps the lane (or covers the RB underneath),
     // otherwise the target's own man defender. Drives the INT/PBU ball path + MLB converge.
-    const mlbIsContester = inLane || (chosenTarget === 'rb' && sep === 0);
+    const mlbIsContester = inLane || (targetKey === 'rb' && sep === 0);
     const sacked = meta.sacked;
     function qbAt(t) { return t < 3 ? [26.6, -5] : [26.6, -5 - (t - 2) * 0.7]; }   // driven back when sacked
 
@@ -436,7 +437,7 @@
       if (coverage === 'zone') {                       // hold the zone, slight drop
         return [baseX[e.defChip], FORMATION.find(function (f) { return f.id === e.defChip; }).y + Math.min(t * 0.4, 1.6)];
       }
-      const beat = (e.key === chosenTarget ? sep * 0.8 : 0.4);
+      const beat = (e.key === targetKey ? sep * 0.8 : 0.4);
       const sideline = baseX[e.chip] < CENTER ? -1 : 1;
       return [rp[0] + sideline * Math.min(beat, 2), rp[1] - (0.5 + beat * 0.3)];
     }
@@ -466,28 +467,47 @@
     return { paths: paths, defAt: defAt, mlbAt: mlbAt, ballAt: ballAt, qbAt: qbAt, captions: captions, caught: caught, intercepted: intercepted, sacked: sacked, sep: sep, catchPt: catchPt, tgtChip: tgt.chip };
   }
 
+  // Place every chip + the ball for one animation tick (shared by the read-window
+  // front half and the throw/result back half).
+  function placeTick(sc, t) {
+    ELIGIBLE.forEach(function (e) {
+      placeChip(e.chip, sc.paths[e.chip][t][0], sc.paths[e.chip][t][1]);
+      if (e.key !== 'rb') { const d = sc.defAt(e, t); placeChip(e.defChip, d[0], d[1]); }
+    });
+    placeChip('MLB', sc.mlbAt(t)[0], sc.mlbAt(t)[1]);
+    if (sc.sacked) {
+      placeChip('QB', sc.qbAt(t)[0], sc.qbAt(t)[1]);
+      placeChip('DE_R', 32.2 + (26.6 - 32.2) * (t / 5), 2 + (-5 - 2) * (t / 5));   // edge rusher collapses the pocket
+    }
+    const b = sc.ballAt(t);
+    placeBall(b[0], b[1]);
+    if (t === 5 && !sc.caught && !sc.intercepted && !sc.sacked) ballEl.style.opacity = '0';
+    if (sc.captions[t]) tickCaption.textContent = sc.captions[t];
+  }
+
+  // Front half: snap → routes develop → "open" read (ticks 0–2). Phase A runs this
+  // non-interactively; Phase B swaps it for the interactive read window.
   async function playReveal(result) {
-    const sc = buildScript(result);
+    const sc = buildScript(result, chosenTarget);
     setStage('animating');
     clearRoutes();
     ballEl.style.opacity = '1';
-    for (let t = 0; t < 6; t++) {
-      ELIGIBLE.forEach(function (e) {
-        placeChip(e.chip, sc.paths[e.chip][t][0], sc.paths[e.chip][t][1]);
-        if (e.key !== 'rb') { const d = sc.defAt(e, t); placeChip(e.defChip, d[0], d[1]); }
-      });
-      placeChip('MLB', sc.mlbAt(t)[0], sc.mlbAt(t)[1]);
-      if (sc.sacked) {
-        placeChip('QB', sc.qbAt(t)[0], sc.qbAt(t)[1]);
-        placeChip('DE_R', 32.2 + (26.6 - 32.2) * (t / 5), 2 + (-5 - 2) * (t / 5));   // edge rusher collapses the pocket
-      }
-      const b = sc.ballAt(t);
-      placeBall(b[0], b[1]);
-      if (t === 5 && !sc.caught && !sc.intercepted && !sc.sacked) ballEl.style.opacity = '0';
-      if (sc.captions[t]) tickCaption.textContent = sc.captions[t];
+    for (let t = 0; t < 3; t++) {
+      placeTick(sc, t);
       if (t === 0) { sfx('snap'); addTrauma(0.10); }
       else if (t === 2 && sc.sep >= 2 && !sc.sacked) sfx('open');
-      else if (t === 3 && !sc.sacked) { sfx('throw'); await hitPause(40); }
+      await sleep(t === 0 ? 450 : 680);
+    }
+    await finishReveal(result, chosenTarget);
+  }
+
+  // Back half: throw → catch/PBU/INT/sack → cleanup (ticks 3–5), then the breakdown.
+  // Called once the target is known (post-snap in Phase B) or for a synthesized sack.
+  async function finishReveal(result, targetKey) {
+    const sc = buildScript(result, targetKey);
+    for (let t = 3; t < 6; t++) {
+      placeTick(sc, t);
+      if (t === 3 && !sc.sacked) { sfx('throw'); await hitPause(40); }
       else if (t === 4) {
         if (sc.sacked)           { sfx('sack');  addTrauma(0.55); flash('#e40058', 0.30, 200); burstAt('sack', 26.6, -2); chipFx('QB', 'squash'); }
         else if (sc.intercepted) { sfx('int');   addTrauma(0.65); flash('#e40058', 0.35, 200); burstAt('int', sc.catchPt[0], sc.catchPt[1]); }
@@ -495,7 +515,7 @@
         else if (result.outcome === 'pbu') { sfx('pbu'); addTrauma(0.35); }
         await hitPause(110);
       }
-      await sleep(t === 0 ? 450 : 680);
+      await sleep(680);
     }
     await sleep(420);
     showResult(result);
