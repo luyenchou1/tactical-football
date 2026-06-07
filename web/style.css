@@ -409,6 +409,26 @@ html, body {
 .target-btn .t-num { font-family: var(--font-arcade); font-size: 12px; color: #fff; }
 .target-btn.live .t-pos { color: var(--star); }
 
+/* ---------- post-play color commentary ---------- */
+#commentary {
+  text-align: center; font-size: 14px; line-height: 1.45;
+  color: var(--ink); padding: 4px 8px 8px; max-width: 42ch; margin: 0 auto;
+}
+#commentary[data-cause="POST_SNAP"] { color: #cfe3ff; }
+#commentary[data-cause="PRE_SNAP"]  { color: #ffe08a; }
+#commentary[data-cause="PERSONNEL"] { color: #ffc2b3; }
+#commentary[data-cause="LUCK"]      { color: #cdd7e3; }
+#commentary[data-cause="EXECUTION"] { color: #cdd7e3; }
+#tape { margin: 4px 0 2px; border-radius: 8px; overflow: hidden; }
+#tape > summary {
+  cursor: pointer; list-style: none; padding: 7px 10px; text-align: center;
+  font-family: var(--font-arcade); font-size: 8px; letter-spacing: .06em;
+  color: var(--muted); user-select: none;
+}
+#tape > summary::-webkit-details-marker { display: none; }
+#tape > summary::after { content: ' \25B8'; }
+#tape[open] > summary::after { content: ' \25BE'; }
+
 /* tappable receivers wear a small position tag so the field maps to the target row */
 #field.reading .chip { transition: left .26s linear, top .26s linear, scale .18s ease; }
 .chip.tappable { cursor: pointer; }

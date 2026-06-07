@@ -18,7 +18,7 @@ python3 -m http.server 8000
 # open http://localhost:8000   (append ?fast to skip the play animations)
 ```
 
-Every roll is shown in the post-play breakdown — tap a row to see the math behind it.
+After each play, plain-English color commentary explains *why* it worked or failed; tap **Show the tape** for the full roll-by-roll breakdown.
 
 ## What's in here
 
@@ -43,7 +43,7 @@ The read happens in two beats. **Pre-snap**, the defense shows a disguised *look
 - **vs Cover 3 zone** — the route that settles in a soft spot comes open (hitch, curl, flat); the out runs into the curl-flat defender.
 - **vs a blitz** — a defender vacates, so a **quick** throw is wide open — or take a **deeper shot** for more yards if you'll risk the sack.
 
-Every route has a time-to-throw, so depth costs time: holding the deep **dig** lets the rush home (~8% sack in base coverage, ~19% vs a blitz) while a quick slant is ~1%; dither past the window and you're sacked outright. The openness cue you read in the window comes from the *same* read math surfaced in the post-play breakdown — what you see is what you get, legible, not a black box.
+Every route has a time-to-throw, so depth costs time: holding the deep **dig** lets the rush home (~8% sack in base coverage, ~19% vs a blitz) while a quick slant is ~1%; dither past the window and you're sacked outright. The openness cue you read in the window comes from the *same* read math surfaced in the post-play breakdown — what you see is what you get. After the whistle, **plain-English color commentary** tells you *why* it worked or failed — a misread look, the wrong target, personnel, or just the dice — with the full KPI breakdown a tap away.
 
 ## Calibration
 
@@ -96,6 +96,7 @@ It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) a
 - [x] Read legibility (colored verdicts) + outcome juice (pop + haptics)
 - [x] Post-snap reads — find the open man by his separation in a timed read window (no spoiler colors)
 - [x] Pre-snap tells & bluffs — press/off corners + a creeping LB hint the coverage and bluff ~1 in 4
+- [x] Post-play color commentary — explains *why* each play worked (scheme / read / personnel / luck); KPI tape on demand
 - [ ] Coach both sides — call defense on the opponent's possessions
 - [ ] Deep shots (go / post / corner) with safety help in the model
 

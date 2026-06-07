@@ -103,6 +103,7 @@
   const tickCaption = document.getElementById('tick-caption');
   const resultLine = document.getElementById('result-line');
   const breakdownEl = document.getElementById('breakdown');
+  const commentaryEl = document.getElementById('commentary');
   const snapBtn = document.getElementById('snap-btn');
   const nextBtn = document.getElementById('next-btn');
   const newGameBtn = document.getElementById('new-game-btn');
@@ -542,6 +543,16 @@
   const READ_WINDOW_MS = 2800;   // forgiving: time to scan and decide before the rush
 
   // Geometry + read cues for the live window — no result/roll needed yet.
+  // Deterministic openness (0 blanketed … 1 wide open) for one receiver — shared by the
+  // read window and the post-play commentary so the two can never drift.
+  function opennessFor(key) {
+    const e = elgByKey[key];
+    const route = chosenPlay.routes[e.key];
+    const lev = coverage === 'zone' ? null : levMap[e.defKey];
+    const st = Sim.expectedSep({ route: route, coverage: coverage, leverage: lev, receiver: P[e.key], defender: P[e.defKey] });
+    return Math.max(0, Math.min(1, (st - 44) / 40));
+  }
+
   function buildPreThrow() {
     const paths = {}, status = {}, openness = {};
     ELIGIBLE.forEach(function (e) {
@@ -549,8 +560,7 @@
       paths[e.chip] = routePath(baseX[e.chip], FORMATION.find(function (f) { return f.id === e.chip; }).y, route);
       const lev = coverage === 'zone' ? null : levMap[e.defKey];
       status[e.key] = Sim.readStatus(route, coverage, lev);                 // kept for tuning/cues; not shown as color
-      const st = Sim.expectedSep({ route: route, coverage: coverage, leverage: lev, receiver: P[e.key], defender: P[e.defKey] });
-      openness[e.key] = Math.max(0, Math.min(1, (st - 44) / 40));           // 0 blanketed … 1 wide open (deterministic)
+      openness[e.key] = opennessFor(e.key);                                 // shared deterministic openness
     });
     // The assigned defender trails the receiver along his route by a gap proportional to
     // the expected separation — so an open man visibly pulls away and a covered one is glued.
@@ -684,6 +694,168 @@
   }
 
   // ---------- result / breakdown ----------
+  function numOf(chip) { const f = FORMATION.find(function (x) { return x.id === chip; }); return f ? f.num : '?'; }
+
+  // ---------- post-play attribution (color commentary) ----------
+  // Derive the causal context from the result + the player's decisions. Pure read of
+  // module state; reuses the deterministic openness so it can't drift from the field.
+  function analyzePlay(result) {
+    const m = result.meta || {}, o = result.outcome;
+    const open = {};
+    ELIGIBLE.forEach(function (e) { open[e.key] = opennessFor(e.key); });
+    let bestKey = ELIGIBLE[0].key;
+    ELIGIBLE.forEach(function (e) {
+      const better = open[e.key] > open[bestKey] + 1e-9;
+      const tie = Math.abs(open[e.key] - open[bestKey]) <= 1e-9;
+      const deeper = ((Sim.ROUTES[chosenPlay.routes[e.key]] || {}).depth || 0) > ((Sim.ROUTES[chosenPlay.routes[bestKey]] || {}).depth || 0);
+      if (better || (tie && deeper)) bestKey = e.key;
+    });
+    const bE = elgByKey[bestKey];
+    const best = { key: bestKey, num: numOf(bE.chip), pos: bE.pos, openness: open[bestKey] };
+
+    let tgt = null, threwToBest = true, missMargin = 0;
+    if (chosenTarget && elgByKey[chosenTarget]) {
+      const e = elgByKey[chosenTarget], route = chosenPlay.routes[e.key];
+      const lev = coverage === 'zone' ? null : levMap[e.defKey];
+      const dr = (P[e.defKey] || {}).r || {};
+      tgt = {
+        key: e.key, num: numOf(e.chip), pos: e.pos, route: route, openness: open[e.key],
+        readStatus: Sim.readStatus(route, coverage, lev),
+        defNum: numOf(e.defChip), defName: (P[e.defKey] || {}).name || '',
+        defCover: coverage === 'zone' ? (dr.ZON || 0) : (dr.COV || 0),
+      };
+      missMargin = best.openness - tgt.openness;
+      threwToBest = (tgt.key === best.key) || (missMargin < 0.22) || (best.openness < 0.55);
+    }
+
+    const bluffed = shownLook !== coverage;
+    const schemedFor = (chosenPlay.tag || '').indexOf('zone') >= 0 ? 'zone' : 'man';
+    const schemeFit = coverage === 'zone' ? (schemedFor === 'zone') : (schemedFor === 'man');
+
+    const byKey = {}; (result.chain || []).forEach(function (s) { byKey[s.key] = s; });
+    const v = function (k) { return (byKey[k] && byKey[k].value) || ''; };
+    let phase;
+    if (o === 'sack' || m.sacked) phase = 'sack';
+    else if (byKey.decision && /check/i.test(v('decision'))) phase = 'checkdown';
+    else if (o === 'interception' || /intercept/i.test(v('contest'))) phase = 'picked';
+    else if (o === 'pbu' || /broken/i.test(v('contest'))) phase = 'brokenup';
+    else if (/drop/i.test(v('catch'))) phase = 'drop';
+    else if (byKey.throw && byKey.throw.status === 'bad' && o !== 'completion') phase = 'badthrow';
+    else if (/contested/i.test(v('catch'))) phase = 'contestedcatch';
+    else if (o === 'completion') { phase = (parseInt(v('yac').replace(/[^0-9-]/g, ''), 10) || 0) >= 6 ? 'yac' : 'cleancomplete'; }
+    else phase = 'incomplete';
+
+    const expBucket = tgt ? (tgt.openness >= 0.66 ? 3 : tgt.openness >= 0.40 ? 2 : tgt.openness >= 0.18 ? 1 : 0) : 0;
+    const realized = typeof m.sep === 'number' ? m.sep : 0;
+    const sepDelta = realized - expBucket;
+    let luck = 'neutral';
+    if (tgt && o === 'completion') {            // covered on paper, came down with it → lucky
+      if ((expBucket <= 1 && (phase === 'contestedcatch' || realized >= 2)) || sepDelta >= 2) luck = 'lucky';
+    } else if (tgt) {                           // open on paper, fell apart → unlucky
+      if ((expBucket >= 2 && (o === 'interception' || o === 'pbu' || phase === 'drop')) || sepDelta <= -2) luck = 'unlucky';
+    }
+
+    return { outcome: o, meta: m, coverage: coverage, shownLook: shownLook, bluffed: bluffed,
+             schemedFor: schemedFor, schemeFit: schemeFit, hurried: !!m.hurried,
+             tgt: tgt, best: best, threwToBest: threwToBest, missMargin: missMargin,
+             phase: phase, luck: luck };
+  }
+
+  // Pick the dominant cause (+ optional secondary) — ordered so the headline teaches
+  // the most actionable lesson (a missed open man beats a lucky completion).
+  function attribute(ctx) {
+    const t = ctx.tgt, b = ctx.best, o = ctx.outcome, failed = o !== 'completion';
+    if (o === 'sack') {
+      if (!t) return { cause: 'POST_SNAP', sub: null, key: 'never_threw' };
+      if (ctx.coverage === 'blitz' && ctx.schemedFor !== 'man') return { cause: 'PRE_SNAP', sub: null, key: 'scheme_sack' };
+      return { cause: 'EXECUTION', sub: ctx.bluffed ? 'PRE_SNAP' : null, key: 'pressure_sack' };
+    }
+    if (failed && ctx.bluffed && !ctx.schemeFit) return { cause: 'PRE_SNAP', sub: null, key: 'bluff_wrong' };
+    if (t && !ctx.threwToBest) {
+      if (o === 'completion') return { cause: 'POST_SNAP', sub: 'LUCK', key: 'missed_read_completed' };
+      return { cause: 'POST_SNAP', sub: ctx.phase === 'picked' ? 'PERSONNEL' : null, key: 'missed_read' };
+    }
+    if (ctx.phase === 'checkdown') {
+      const look = t ? t.openness : b.openness;
+      if (look >= 0.50) return { cause: 'LUCK', sub: null, key: 'window_closed' };   // looked open, the roll went tight
+      return { cause: (ctx.bluffed && !ctx.schemeFit) ? 'PRE_SNAP' : 'POST_SNAP', sub: null, key: 'checkdown_covered' };
+    }
+    if (t && failed && t.openness < 0.40 && t.defCover >= 80) {
+      return { cause: 'PERSONNEL', sub: null, key: ctx.phase === 'picked' ? 'pick_on_talent' : 'lockdown_loss' };
+    }
+    if (ctx.luck === 'unlucky') return { cause: 'LUCK', sub: ctx.threwToBest ? 'POST_SNAP' : null, key: ctx.phase === 'drop' ? 'unlucky_drop' : 'unlucky_pbu_int' };
+    if (ctx.luck === 'lucky') return { cause: 'LUCK', sub: null, key: 'lucky_contested' };
+    if (o === 'completion') {
+      if (t && t.openness >= 0.66) {
+        const e = elgByKey[t.key], rec = (P[e.key] || {}).r || {}, def = (P[e.defKey] || {}).r || {};
+        const mismatch = (rec.SPD - def.SPD >= 10) || (rec.RTE - (ctx.coverage === 'zone' ? def.ZON : def.COV) >= 12);
+        if (mismatch) return { cause: 'PERSONNEL', sub: null, key: 'mismatch_win' };
+      }
+      return { cause: 'POST_SNAP', sub: ctx.phase === 'yac' ? 'yac' : null, key: ctx.phase === 'yac' ? 'right_read_yac' : 'right_read' };
+    }
+    if (ctx.phase === 'badthrow') return { cause: 'EXECUTION', sub: null, key: ctx.hurried ? 'bad_throw_hurried' : 'bad_throw' };
+    if (ctx.phase === 'drop') return { cause: 'LUCK', sub: null, key: 'unlucky_drop' };
+    return { cause: 'POST_SNAP', sub: null, key: 'checkdown_covered' };
+  }
+
+  // Color-commentary templates keyed by the attribution result; 2–3 variants each,
+  // rotating per cell so repeats vary. Returns { text, cause }.
+  const _coi = {};
+  function buildCommentary(ctx) {
+    const a = attribute(ctx), t = ctx.tgt, b = ctx.best;
+    const T = t ? '#' + t.num : '', Tpos = t ? t.pos : '', Trte = t ? cap(t.route) : 'route';
+    const D = t ? '#' + t.defNum : 'the defender';
+    const B = '#' + b.num, Bpos = b.pos;
+    const COV = { man: 'man', zone: 'the zone', blitz: 'the blitz' }[ctx.coverage] || ctx.coverage;
+    const SCH = ctx.schemedFor === 'zone' ? 'zone' : 'man';
+    const QB = (P.qb && P.qb.name) ? P.qb.name.split(' ').pop() : 'the QB';
+    const LIB = {
+      right_read: ['Perfect read — ' + T + ' won his matchup on the ' + Trte + ' and ' + QB + ' hit him in stride.',
+                   'That’s how you attack ' + COV + ': ' + T + ' found the open window on the ' + Trte + '.',
+                   T + ' came open against ' + COV + ' and ' + QB + ' didn’t miss him.'],
+      right_read_yac: ['Great read to ' + T + ' on the ' + Trte + ', and he turned it up for a big gain after the catch.',
+                       T + ' won on the ' + Trte + ' and made ' + D + ' miss for extra — that’s the dagger.'],
+      missed_read: ['Right scheme, wrong read — ' + Bpos + ' ' + B + ' was wide open and the ball went to ' + T + ' in coverage.',
+                    T + ' was blanketed; ' + Bpos + ' ' + B + ' had broken free and never got the look.',
+                    'He stared down ' + Tpos + ' — ' + B + ' was the throw the whole way.'],
+      missed_read_completed: ['It worked, but ' + B + ' was the better read — ' + T + ' was a tighter window than it needed to be.',
+                              'Completed to ' + T + ', though ' + Bpos + ' ' + B + ' was running wide open for the easier throw.'],
+      checkdown_covered: ['Coverage took everything away — ' + T + ' had no window and the QB checked it down.',
+                          'Nothing came open against ' + COV + '; ' + QB + ' had to dump it off.'],
+      window_closed: [T + ' looked open, but the window slammed shut before the ball got there.',
+                      'The read was there, but ' + COV + ' rallied and closed it fast — no window.'],
+      bluff_wrong: ['Beautiful disguise — they baited the ' + SCH + ' call and played ' + COV + ' instead.',
+                    'They schemed for ' + SCH + ', but the defense showed a different look and rolled to ' + COV + '.',
+                    'That’s on the look: a ' + SCH + ' concept run straight into ' + COV + '.'],
+      scheme_sack: ['They dialed up a shot, but it was ' + COV + ' — the rush got home before it developed.',
+                    'No chance on the protection: a slow-developing call against ' + COV + ', and ' + QB + ' goes down.'],
+      pressure_sack: [QB + ' held it waiting for the ' + Trte + ' to develop and the rush buried him.',
+                      'Coverage held just long enough — the route took too long and it’s a sack.'],
+      never_threw: [QB + ' never pulled the trigger — nobody uncovered and the pocket caved.',
+                    'Held it too long waiting for a window that never came.'],
+      lockdown_loss: ['They made the right call, but ' + D + ' just blanketed ' + T + ' the whole way.',
+                      'Can’t fault the read — ' + D + ' is a lockdown defender and smothered the ' + Trte + '.'],
+      pick_on_talent: [D + ' read it the whole way and jumped the ' + Trte + ' for the takeaway — pure coverage.'],
+      mismatch_win: ['Pure mismatch — ' + T + ' is too much for ' + D + ', open the moment the ' + Trte + ' broke.',
+                     T + ' ran right by ' + D + '; that’s a talent edge the defense couldn’t cover.'],
+      unlucky_drop: [T + ' was open — that one’s just a drop, nothing the defense did.',
+                     'Right read, open man… ' + T + ' just couldn’t haul it in.'],
+      unlucky_pbu_int: [T + ' had his man beat, but ' + D + ' recovered and made a play on the ball — tough break.',
+                        'That should’ve been a completion; ' + D + ' made a heck of a play on it.'],
+      lucky_contested: [T + ' was covered, but came down with it anyway — ' + QB + ' got away with one.',
+                        'Tight window into ' + D + ', and ' + T + ' made it stick — a 50/50 that went their way.'],
+      bad_throw: ['The window was there — ' + QB + ' just sailed it.',
+                  QB + ' put it in a bad spot; ' + T + ' had no chance on it.'],
+      bad_throw_hurried: ['Flushed off his spot, ' + QB + ' had to rush the throw to ' + T + ' and missed.',
+                          'Under pressure, ' + QB + ' couldn’t set his feet and sailed it.'],
+    };
+    const arr = LIB[a.key] || LIB.right_read;
+    _coi[a.key] = _coi[a.key] || 0;
+    const text = arr[_coi[a.key] % arr.length];
+    _coi[a.key] += 1;
+    return { text: text, cause: a.cause };
+  }
+
   function showResult(result) {
     setStage('postplay');
     advanceDown(result);
@@ -698,6 +870,7 @@
     resultLine.className = cls;
     resultLine.textContent = txt;
     popIn(resultLine);
+    try { const cm = buildCommentary(analyzePlay(result)); commentaryEl.textContent = cm.text; commentaryEl.dataset.cause = cm.cause; popIn(commentaryEl); } catch (e) { commentaryEl.textContent = ''; }
     buzz(driveResult === 'td' ? [40, 30, 70] : (o === 'interception' || o === 'sack') ? [70] : o === 'completion' ? 12 : 0);
     if (driveResult === 'td') { sfx('td'); sfx('crowd'); announce('td'); addTrauma(0.75); flash('#f8b800', 0.55, 220); callout('td'); burstAt('td', 26.6, 12); popIn(document.getElementById('hud-score')); }
     else if (o === 'interception') { sfx('crowd'); announce('int'); callout('int'); streak = 0; setOnFire(false); }
@@ -978,6 +1151,7 @@
     }
     const choice = await runReadWindow();
     const targetKey = choice.targetKey;
+    chosenTarget = targetKey;                         // reflect the post-snap pick in module state (for the breakdown + commentary)
     let result;
     if (targetKey) {
       const e = elgByKey[targetKey];
