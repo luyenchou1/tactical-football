@@ -1,6 +1,6 @@
 # Tactical Football
 
-Turn-based tactical American football for mobile — think **XCOM-meets-football**. The defense disguises its coverage behind a pre-snap *look* that can bluff — you read the look, call a play, **snap the ball**, and find the open man in a short window before the pass rush gets home, then watch it resolve through a chain of rating-driven dice rolls.
+Turn-based tactical American football for mobile — think **XCOM-meets-football**. You read each defender's **leverage** and the disguised look, call a play, and **set** — the defense declares its true coverage (a man look can roll to Cover 3) so you can **audible** — then **hike** and find the open man in a short window before the pass rush gets home, all resolved through a chain of rating-driven dice rolls.
 
 > **Status:** playable, and now juicy. A 4-play book over 7 routes, 3 **disguised** defensive looks you diagnose **post-snap** in a timed read window, a pass rush + sacks, interceptions on forced reads, and a 5-round game vs a CPU opponent — wrapped in an arcade audiovisual layer (NES field, procedural 8-bit sound, an announcer, screen shake, confetti, and NBA-Jam-style callouts). The matchup math runs in two engines (JS + a Python mirror) kept in sync and guarded by a test suite.
 
@@ -8,7 +8,7 @@ Turn-based tactical American football for mobile — think **XCOM-meets-football
 
 **▶ Play it live: https://luyenchou1.github.io/tactical-football/** — open it on your phone and **Add to Home Screen** to install it (works offline once installed).
 
-A game is **5 rounds**: each round you get a possession, then the opponent gets one. The coverage is **disguised** behind a pre-snap look (press vs off corners, a creeping linebacker) that can bluff — read it, call a play, snap, then find whoever wins his matchup (**man**, **Cover 3 zone**, or **blitz**) before the pass rush gets home. Outscore them; your best score is saved.
+A game is **5 rounds**: each round you get a possession, then the opponent gets one. Read the defenders' **leverage** and the disguised look, call a play, then **set** — the coverage declares (**man**, **Cover 3 zone**, or **blitz**) and can rotate, so **audible** if it shifted — then **hike** and find whoever wins his matchup before the pass rush gets home. Outscore them; your best score is saved.
 
 Run it locally (static web app — no build step, no dependencies):
 
@@ -31,13 +31,13 @@ After each play, plain-English color commentary explains *why* it worked or fail
 ## How a play resolves
 
 ```
-pre-snap: read the look (press / off / creep — can bluff) → call a play
-snap → coverage declares → READ WINDOW: routes develop, the open man pulls away
-     → you throw (or hold too long → sacked) → separation roll
-     → catch / PBU / INT → yards after catch
+pre-snap: read leverage + the look → call a play
+set → defense DECLARES its true coverage (a man look can roll to Cover 3) → AUDIBLE if it shifted
+hike → READ WINDOW: routes develop, the open man pulls away → throw before the rush
+     → separation roll → catch / PBU / INT → yards after catch
 ```
 
-The read happens in two beats. **Pre-snap**, the defense shows a disguised *look*: **press** corners (tight) hint man, **off** corners (a cushion) hint zone, and a **creeping linebacker** hints blitz — but the look bluffs about 1 in 4 snaps, so it's an edge, not a certainty. You call a **play** (which assigns all five receivers a route) on that read. **At the snap** the coverage declares itself and a short, forgiving **read window** opens: every defender trails his receiver by the separation the matchup earns, so the **open man visibly pulls away** while a covered one stays glued (everyone but the five matchups dims so it reads clearly). Tap the open man — by jersey number on the field or the live target row — before the rush gets home.
+The read happens in beats. **Pre-snap**, each defender shows his **leverage** (the shoulder he's shading — outside leverage begs for a slant, inside for an out) and the shell shows a press/off/creep that hints man, zone, or blitz — but the look can **bluff**. You read it and call a **play**, then **SET**: the defense **declares** its true coverage and can *rotate* — a man look rolling to Cover 3, corners bailing or creeping. If the shift beat your call, **audible** to a better play; then **HIKE**. A short, forgiving **read window** opens — every defender trails his receiver by the separation the matchup earns, so the **open man visibly pulls away** while a covered one stays glued (everyone but the five matchups dims so it reads clearly) — and you tap him before the rush gets home.
 
 - **vs man** — the route that breaks *away* from its defender's leverage comes open (slant beats outside, out beats inside); a drag/flat beats man underneath. Force a route *into* leverage and it can be picked.
 - **vs Cover 3 zone** — the route that settles in a soft spot comes open (hitch, curl, flat); the out runs into the curl-flat defender.
@@ -96,6 +96,7 @@ It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) a
 - [x] Read legibility (colored verdicts) + outcome juice (pop + haptics)
 - [x] Post-snap reads — find the open man by his separation in a timed read window (no spoiler colors)
 - [x] Pre-snap tells & bluffs — press/off corners + a creeping LB hint the coverage and bluff ~1 in 4
+- [x] Leverage cues + snap rotation + **audible** — read each defender's shade; the coverage declares (man↔Cover 3) at the line and you can audible to adjust
 - [x] Post-play color commentary — explains *why* each play worked (scheme / read / personnel / luck)
 - [x] Instant replay — scrub/step the play back in slow-mo, KPI breakdown synced to each frame
 - [ ] Coach both sides — call defense on the opponent's possessions

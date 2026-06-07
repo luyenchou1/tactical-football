@@ -1072,6 +1072,7 @@
     updateReadBanner();
     renderPlayPicker();
     snapBtn.disabled = true;
+    snapBtn.textContent = 'SET ›';     // first press declares the defense; second press (HIKE) snaps
     hintBox.classList.add('hidden');
     hintBtn.setAttribute('aria-pressed', 'false');
     updateHint();
@@ -1113,15 +1114,12 @@
 
   function updateReadBanner() {
     if (!revealed) {
-      readText.innerHTML = 'Defense: <b>? ? ?</b> — read the alignment, then snap';
+      readText.innerHTML = 'Defense: <b>? ? ?</b> — read the leverage, then set';
       readBanner.dataset.coverage = 'hidden';
       return;
     }
-    readText.innerHTML = coverage === 'man'
-      ? 'Defense: <b>MAN</b> — read each matchup’s leverage'
-      : coverage === 'zone'
-        ? 'Defense: <b>COVER 3</b> — zone shell, deep thirds'
-        : 'Defense: <b>BLITZ</b> — extra rusher; get it out quick';
+    const name = coverage === 'man' ? 'MAN' : coverage === 'zone' ? 'COVER 3' : 'BLITZ';
+    readText.innerHTML = 'Defense: <b>' + name + '</b> — audible or hike';   // declared at the snap
     readBanner.dataset.coverage = coverage;
   }
 
@@ -1200,7 +1198,7 @@
   });
   snapBtn.addEventListener('click', async function () {
     if (!chosenPlay) return;
-    if (fastMode) {                                   // ?fast: auto-pick the best read, skip the window
+    if (fastMode) {                                   // ?fast: declare + auto-pick + go in one press
       revealCoverage();
       chosenTarget = bestRead();
       const e = elgByKey[chosenTarget];
@@ -1210,6 +1208,13 @@
       }));
       return;
     }
+    if (!revealed) {                                  // SET — get to the line: the defense declares its true look
+      revealCoverage();                               // rotates the shown look to the true coverage + flips the banner
+      sfx('ui');
+      snapBtn.textContent = 'HIKE ›';                 // now you may audible (tap a new play) or HIKE
+      return;
+    }
+    // HIKE — snap it; the read window opens
     const choice = await runReadWindow();
     const targetKey = choice.targetKey;
     chosenTarget = targetKey;                         // reflect the post-snap pick in module state (for the breakdown + commentary)
