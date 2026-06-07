@@ -2,7 +2,7 @@
 
 Turn-based tactical American football for mobile — think **XCOM-meets-football**. You read each defender's **leverage** and the disguised look, call a play, and **set** — the defense declares its true coverage (a man look can roll to Cover 3) so you can **audible** — then **hike** and find the open man in a short window before the pass rush gets home, all resolved through a chain of rating-driven dice rolls.
 
-> **Status:** playable, and now juicy. A 4-play book over 7 routes, 3 **disguised** defensive looks you diagnose **post-snap** in a timed read window, a pass rush + sacks, interceptions on forced reads, and a 5-round game vs a CPU opponent — wrapped in an arcade audiovisual layer (NES field, procedural 8-bit sound, an announcer, screen shake, confetti, and NBA-Jam-style callouts). The matchup math runs in two engines (JS + a Python mirror) kept in sync and guarded by a test suite.
+> **Status:** playable, and now juicy. A 6-play book over 10 routes — including deep shots (go, post, corner) — 3 **disguised** defensive looks you diagnose **post-snap** in a timed read window, a pass rush + sacks, interceptions on forced reads, and a 5-round game vs a CPU opponent — wrapped in an arcade audiovisual layer (NES field, procedural 8-bit sound, an announcer, screen shake, confetti, and NBA-Jam-style callouts). The matchup math runs in two engines (JS + a Python mirror) kept in sync and guarded by a test suite.
 
 ## Play it
 
@@ -41,7 +41,8 @@ The read happens in beats. **Pre-snap**, each defender shows his **leverage** (t
 
 - **vs man** — the route that breaks *away* from its defender's leverage comes open (slant beats outside, out beats inside); a drag/flat beats man underneath. Force a route *into* leverage and it can be picked.
 - **vs Cover 3 zone** — the route that settles in a soft spot comes open (hitch, curl, flat); the out runs into the curl-flat defender.
-- **vs a blitz** — a defender vacates, so a **quick** throw is wide open — or take a **deeper shot** for more yards if you'll risk the sack.
+- **vs a blitz** — a defender vacates, so a **quick** throw (slant, drag, the back) is wide open — or take a **deep shot** into the thinned coverage if you'll risk the sack.
+- **deep shots (go / post / corner)** — slow to develop, so every one is a sack gamble: a **post** or **corner** beats man leverage *down the field* and finds the Cover-3 seam, while a **go** is a pure speed race best when a blitz thins the help. Read it right and it's a chunk play; force it into coverage and it's the most interceptable ball in the game.
 
 Every route has a time-to-throw, so depth costs time: holding the deep **dig** lets the rush home (~8% sack in base coverage, ~19% vs a blitz) while a quick slant is ~1%; dither past the window and you're sacked outright. The openness cue you read in the window comes from the *same* read math surfaced in the post-play breakdown — what you see is what you get. After the whistle, **plain-English color commentary** tells you *why* it worked or failed — a misread look, the wrong target, personnel, or just the dice — and an **instant replay** lets you scrub the play back in slow-mo to verify it with your own eyes, the KPI breakdown alongside.
 
@@ -59,7 +60,7 @@ The math is tuned so that rating spread maps to a believable completion-rate gra
 
 Monotonic on both axes; elite-vs-elite plays as a real contest, elite-vs-poor is a layup.
 
-**Risk & balance** (measured, not asserted): a deep dig carries ~8% sack risk in base coverage (~19% vs a blitz) vs ~1% on a quick slant; forcing a route into coverage is intercepted ~1.5% vs ~0.4% on a good read. At the game level a random play-masher wins ~51%, reading the coverage wins ~65%, and always bombing deep wins ~50% — the read matters and nothing dominates.
+**Risk & balance** (measured, not asserted): a deep dig carries ~8% sack risk in base coverage (~19% vs a blitz) vs ~1% on a quick slant; forcing a route into coverage is intercepted ~1.5% vs ~0.4% on a good read. At the game level a random play-masher wins ~47%, reading the coverage wins ~70%, and always bombing deep is a break-even ~50% — the read matters more than ever (a deep shot rewards a correct read and punishes a forced one), and nothing dominates.
 
 Reproduce / verify:
 
@@ -89,7 +90,7 @@ It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) a
 - [x] Game arc: multi-round games with a saved high score
 - [x] Second coverage (Cover 3 zone): the read flips — hitch beats zone, leverage beats man
 - [x] An opponent (abstracted CPU possessions) for a true win/lose result
-- [x] Playbook (4 plays, 7 routes) — pick a play and target any of 5 receivers
+- [x] Playbook (6 plays, 10 routes) — pick a play and target any of 5 receivers
 - [x] Risk/reward: pass rush + pocket clock (sacks), the blitz, and INTs on forced reads
 - [x] Tuned opponent, a zero-dep Node test harness, and a drive-level balance sim
 - [x] Arcade audiovisual layer: NES re-skin + pixel fonts, procedural sound + announcer + menu music, screen shake, particles, SLAM callouts, on-fire streak, painted field + CRT finish
@@ -100,7 +101,8 @@ It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) a
 - [x] Post-play color commentary — explains *why* each play worked (scheme / read / personnel / luck)
 - [x] Instant replay — scrub/step the play back in slow-mo, KPI breakdown synced to each frame
 - [ ] Coach both sides — call defense on the opponent's possessions
-- [ ] Deep shots (go / post / corner) with safety help in the model
+- [x] Deep shots — go / post / corner verticals: the post/corner leverage read downfield, Four Verticals + Smash, the shot as the blitz answer (tuned so blind bombing stays break-even)
+- [ ] Safety help in the model — a true single-high robber bracketing the deep post
 
 ## The Swift simulator
 

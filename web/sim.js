@@ -29,6 +29,11 @@
     dig:   { depth: 11, brk: 'in',  manBase: -4, zoneSep: 8,   zoneLane: 32, yac: 2, tt: 2.9 },
     curl:  { depth: 9,  brk: null,  manBase: 2,  zoneSep: 18,  zoneLane: 12, yac: 1, tt: 2.3 },
     flat:  { depth: 2,  brk: null,  manBase: 10, zoneSep: 16,  zoneLane: 8,  yac: 3, tt: 1.4 },
+    // deep shots — slow to develop (a sack gamble), pay off in chunk yards on a clean read;
+    // forcing one into coverage is the riskiest throw in the game (INT scales with depth)
+    go:     { depth: 17, brk: null,  manBase: -9, zoneSep: -5,  zoneLane: 10, yac: 2, tt: 3.8 },
+    post:   { depth: 16, brk: 'in',  manBase: -6, zoneSep: 5,   zoneLane: 18, yac: 2, tt: 3.4 },
+    corner: { depth: 16, brk: 'out', manBase: -3, zoneSep: 4,   zoneLane: 10, yac: 1, tt: 3.2 },
   };
 
   const CATCH_BONUS = { great: 30, good: 15, ok: 0, low: -20, bad: -40 };

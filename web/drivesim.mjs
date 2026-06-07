@@ -33,6 +33,8 @@ const PLAYS = [
   { id: 'mesh',    routes: { x: 'dig',   z: 'drag',  slot: 'drag',  te: 'curl', rb: 'flat' } },
   { id: 'stick',   routes: { x: 'out',   z: 'curl',  slot: 'hitch', te: 'dig',  rb: 'flat' } },
   { id: 'spacing', routes: { x: 'hitch', z: 'out',   slot: 'curl',  te: 'drag', rb: 'flat' } },
+  { id: 'verticals', routes: { x: 'go',  z: 'go',    slot: 'post',  te: 'corner', rb: 'flat' } },
+  { id: 'smash',   routes: { x: 'hitch', z: 'corner', slot: 'hitch', te: 'drag', rb: 'flat' } },
 ];
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }

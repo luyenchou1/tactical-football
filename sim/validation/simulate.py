@@ -63,6 +63,11 @@ ROUTES = {
     "dig":   {"depth": 11, "break": "in",  "man_base": -4, "zone_sep": 8,   "zone_lane": 32, "yac": 2, "tt": 2.9},
     "curl":  {"depth": 9,  "break": None,  "man_base": 2,  "zone_sep": 18,  "zone_lane": 12, "yac": 1, "tt": 2.3},
     "flat":  {"depth": 2,  "break": None,  "man_base": 10, "zone_sep": 16,  "zone_lane": 8,  "yac": 3, "tt": 1.4},
+    # deep shots — slow to develop (a sack gamble), pay off in chunk yards on a clean read;
+    # forcing one into coverage is the riskiest throw in the game (INT scales with depth)
+    "go":     {"depth": 17, "break": None,  "man_base": -9, "zone_sep": -5, "zone_lane": 10, "yac": 2, "tt": 3.8},
+    "post":   {"depth": 16, "break": "in",  "man_base": -6, "zone_sep": 5,  "zone_lane": 18, "yac": 2, "tt": 3.4},
+    "corner": {"depth": 16, "break": "out", "man_base": -3, "zone_sep": 4,  "zone_lane": 10, "yac": 1, "tt": 3.2},
 }
 
 CATCH_BONUS = {"great": 30, "good": 15, "ok": 0, "low": -20, "bad": -40}

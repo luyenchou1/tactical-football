@@ -61,7 +61,7 @@
 
   // ---------- playbook ----------
   const PLAYS = [
-    { id: 'slants',  name: 'Quick Slants', tag: 'man-beater',
+    { id: 'slants',  name: 'Quick Slants', tag: 'man-beater · vs blitz',
       routes: { x: 'slant', z: 'slant', slot: 'slant', te: 'drag', rb: 'flat' } },
     { id: 'mesh',    name: 'Mesh', tag: 'man-beater',
       routes: { x: 'dig', z: 'drag', slot: 'drag', te: 'curl', rb: 'flat' } },
@@ -69,6 +69,10 @@
       routes: { x: 'out', z: 'curl', slot: 'hitch', te: 'dig', rb: 'flat' } },
     { id: 'spacing', name: 'Spacing', tag: 'zone-beater',
       routes: { x: 'hitch', z: 'out', slot: 'curl', te: 'drag', rb: 'flat' } },
+    { id: 'verticals', name: 'Four Verticals', tag: 'zone-beater · deep',
+      routes: { x: 'go', z: 'go', slot: 'post', te: 'corner', rb: 'flat' } },
+    { id: 'smash',   name: 'Smash', tag: 'zone-beater · deep',
+      routes: { x: 'hitch', z: 'corner', slot: 'hitch', te: 'drag', rb: 'flat' } },
   ];
 
   // ---------- route geometry (parametric: applied to each receiver's start) ----------
@@ -83,6 +87,9 @@
       case 'dig':   return [[x, y], [x, y + 4], [x, y + 8], [x + inX * 4, y + 10], [x + inX * 4, y + 10], [x + inX * 8, y + 11]];
       case 'curl':  return [[x, y], [x, y + 5], [x, y + 9], [x, y + 8], [x, y + 8], [x, y + 8]];
       case 'flat':  return [[x, y], [x + out * 2, y + 1], [x + out * 4, y + 1.5], [x + out * 6, y + 2], [x + out * 6, y + 2], [x + out * 9, y + 2.5]];
+      case 'go':    return [[x, y], [x, y + 4.5], [x, y + 9], [x, y + 13], [x, y + 13], [x, y + 16]];
+      case 'post':  return [[x, y], [x, y + 5], [x, y + 9.5], [x + inX * 3, y + 12.5], [x + inX * 3, y + 12.5], [x + inX * 6.5, y + 15]];
+      case 'corner':return [[x, y], [x, y + 5], [x, y + 9.5], [x + out * 2, y + 12.5], [x + out * 2, y + 12.5], [x + out * 4, y + 15]];
       default:      return [[x, y], [x, y + 2], [x, y + 4], [x, y + 5], [x, y + 5], [x, y + 6]];
     }
   }
