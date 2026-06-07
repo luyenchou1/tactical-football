@@ -264,8 +264,8 @@
       noiseHit(1400, 1.2, 'bandpass', 0.10, 0.22, [1800, 700]);
     },
     catch: function () {
-      synth({ f: 480, type: 'triangle', fm: { ratio: 2, index: 1.8, decay: 0.25 }, slideTo: 640, slideDur: 0.04, a: .003, d: .05, s: .35, r: .1, dur: .07, vol: .3, send: .18 });
-      noiseHit(2800, 1.0, 'highpass', 0.02, 0.16);
+      synth({ f: 480, type: 'triangle', fm: { ratio: 2, index: 1.8, decay: 0.25 }, slideTo: 640, slideDur: 0.04, a: .003, d: .05, s: .35, r: .1, dur: .07, vol: .22, send: .18 });  // arcade grab pop, softened so the leather is the star
+      leatherCatch();                                                                                                                                                              // the ball-on-pads THWACK
     },
     first: function () {
       synth({ f: 784, type: 'sawtooth', uni: [-7, 7], fm: { ratio: 1, index: 2, decay: 0.3 }, a: .004, d: .05, s: .5, r: .1, dur: .08, vol: .26, filt: { f0: 4000, f1: 2000, q: 2 }, send: .25 });
@@ -275,6 +275,8 @@
       noiseHit(850, 1.6, 'bandpass', 0.07, 0.50);
       synth({ f: 170, type: 'sawtooth', fm: { ratio: 1.4, index: 4.5, decay: 0.12 }, slideTo: 65, slideDur: 0.16, a: .002, d: .04, s: .25, r: .1, dur: .1, vol: .4, filt: { f0: 1800, f1: 180, q: 4 }, dist: .45, send: .12 });
       thump(150, 40, 0.18, 0.6);
+      setTimeout(function () { thump(90, 42, 0.15, 0.45); noiseHit(150, 3.5, 'bandpass', 0.07, 0.26); }, 30);  // body hits the turf
+      setTimeout(grunt, 30);                                                                                    // the QB grunts
     },
     int: function () {
       synth({ f: 440, type: 'sawtooth', fm: { ratio: 1.5, index: 3, decay: 0.2 }, slideTo: 120, slideDur: 0.18, a: .004, d: .06, s: .3, r: .12, dur: .12, vol: .34, filt: { f0: 2400, f1: 300, q: 3 }, dist: .3, send: .15 });
@@ -443,6 +445,109 @@
     setTimeout(function () { synth({ f: 1320, type: 'square', fm: { ratio: 2, index: 1.2, decay: 0.3 }, a: .003, d: .05, s: .4, r: .12, dur: .1, vol: .26, send: .3 }); }, 75);
   }
 
+  // ---- organic football SFX: formant voices (grunt/crowd) + foley impacts -----
+  //   from a procedural-audio research sprint. formant() is the new primitive:
+  //   a buzz(+noise) source through a PARALLEL bandpass formant bank = a vowel.
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+  var FORMANTS = {                                  // male vowels: [centerHz, Q, relGain]
+    uh: [[640, 7, 1.0], [1190, 11, 0.45], [2390, 24, 0.20]],   // grunt
+    aw: [[570, 7, 1.0], [840, 11, 0.70], [2410, 20, 0.20]],    // groan / ohh
+    ah: [[730, 7, 1.0], [1090, 11, 0.50], [2440, 20, 0.22]]    // gasp
+  };
+  function formant(o) {
+    if (muted || typeof zzfxX === 'undefined') return;
+    ensureUnlock();
+    try {
+      var c = zzfxX, t = c.currentTime, sr = c.sampleRate;
+      var f0 = o.f0 || 120, dur = o.dur || 0.2, vol = o.vol == null ? 0.25 : o.vol,
+          a = o.a || 0.01, d = o.d || 0.05, s = o.s == null ? 0.5 : o.s, r = o.r || 0.1,
+          end = t + a + d + dur, stop = end + r + 0.05, spread = o.jitter == null ? 0.05 : o.jitter;
+      var table = FORMANTS[o.vowel] || FORMANTS.uh;
+      var amp = c.createGain();
+      amp.gain.setValueAtTime(0.0001, t);
+      amp.gain.exponentialRampToValueAtTime(Math.max(0.0001, vol), t + a);
+      amp.gain.exponentialRampToValueAtTime(Math.max(0.0001, vol * s), t + a + d);
+      amp.gain.setValueAtTime(Math.max(0.0001, vol * s), end);
+      amp.gain.exponentialRampToValueAtTime(0.0001, end + r);
+      amp.connect(busIn());
+      if (o.send) { var sg = c.createGain(); sg.gain.value = o.send; amp.connect(sg); sg.connect(reverbIn()); }
+      var src = c.createGain(); src.gain.value = 1;
+      var osc = c.createOscillator(); osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(f0, t);
+      if (o.slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.slideTo), t + dur);
+      osc.connect(src); osc.start(t); osc.stop(stop);
+      if (o.noiseMix) {                              // larynx grit / breath = the organic edge
+        var nlen = Math.max(1, (sr * (dur + a + d + r)) | 0), nb = c.createBuffer(1, nlen, sr), nd = nb.getChannelData(0);
+        for (var i = 0; i < nlen; i++) nd[i] = Math.random() * 2 - 1;
+        var ns = c.createBufferSource(); ns.buffer = nb;
+        var hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1500; hp.Q.value = 0.5;
+        var ng = c.createGain(); ng.gain.value = o.noiseMix;
+        ns.connect(hp); hp.connect(ng); ng.connect(src); ns.start(t); ns.stop(stop);
+      }
+      table.forEach(function (fm) {                  // parallel bandpass bank (sum, not cascade)
+        var bp = c.createBiquadFilter(); bp.type = 'bandpass';
+        bp.frequency.value = fm[0] * (1 + (Math.random() * 2 - 1) * spread); bp.Q.value = fm[1];
+        var fg = c.createGain(); fg.gain.value = fm[2];
+        src.connect(bp); bp.connect(fg); fg.connect(amp);
+      });
+    } catch (e) {}
+  }
+  function grunt() {                                 // QB effort vocalization, masked under the sack thump
+    formant({ vowel: Math.random() < 0.5 ? 'uh' : 'ah', f0: 150 * rnd(0.88, 1.12), slideTo: 95 * rnd(0.9, 1.05),
+      dur: 0.20 * rnd(0.85, 1.15), vol: 0.30, a: 0.008, d: 0.05, s: 0.45, r: 0.10, noiseMix: 0.24, send: 0.10 });
+  }
+  function tackle(big) {                             // dark body-on-body impact; big = gang-tackle crunch
+    if (muted || typeof zzfxX === 'undefined') return;
+    ensureUnlock();
+    try {
+      var c = zzfxX, t = c.currentTime, sr = c.sampleRate, dur = 0.16,
+          n = Math.max(1, (sr * dur) | 0), b = c.createBuffer(1, n, sr), dd = b.getChannelData(0);
+      for (var i = 0; i < n; i++) dd[i] = Math.random() * 2 - 1;
+      var ws = c.createBufferSource(); ws.buffer = b;
+      var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 1;
+      lp.frequency.setValueAtTime(1600 * rnd(0.9, 1.1), t);
+      lp.frequency.exponentialRampToValueAtTime(110, t + dur);            // highs removed => heavy/soft, not a crack
+      var wg = c.createGain(); wg.gain.setValueAtTime(big ? 0.5 : 0.42, t); wg.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      ws.connect(lp); lp.connect(wg); wg.connect(busIn()); ws.start(t); ws.stop(t + dur);
+    } catch (e) {}
+    if (big) {
+      thump(90, 45, 0.18, 0.6);
+      noiseHit(170 * rnd(0.95, 1.06), 3.5, 'bandpass', 0.06, 0.30);
+      setTimeout(function () { noiseHit(150 * rnd(0.95, 1.06), 3.0, 'bandpass', 0.06, 0.24); }, 12);
+      setTimeout(function () { noiseHit(140 * rnd(0.95, 1.06), 3.0, 'bandpass', 0.05, 0.20); }, 24);
+    } else {
+      thump(95 * rnd(0.95, 1.06), 45, 0.16, 0.55);
+      noiseHit(160 * rnd(0.95, 1.08), 3.5, 'bandpass', 0.07, 0.34);
+    }
+  }
+  function leatherCatch() {                          // crisp ball-on-pads thwack — 4 synchronous layers
+    if (muted || typeof zzfxX === 'undefined') return;
+    ensureUnlock();
+    noiseHit(2900 * rnd(0.94, 1.06), 1.2, 'highpass', 0.018, 0.34, [2900, 6500]);  // bright leather slap
+    noiseHit(2000 * rnd(0.95, 1.05), 1.4, 'bandpass', 0.03, 0.22);                 // upper-mid leather pop
+    noiseHit(240 * rnd(0.96, 1.05), 5.0, 'bandpass', 0.05, 0.30);                  // 240Hz modal pad-thunk
+    thump(180, 120, 0.055, 0.28);                                                  // faint chest tick
+  }
+  function crowdOhh(loud) {                          // disappointed falling 'ohhh': groan bed + low /ɔ/ formant voices
+    if (muted || typeof zzfxX === 'undefined') return;
+    crowd('groan');                                  // the noise bed = the size
+    var pitches = [92, 98, 110, 124, 131, 103], v = loud ? 0.07 : 0.055;
+    pitches.forEach(function (p) {
+      formant({ vowel: 'aw', f0: p * rnd(0.96, 1.04), slideTo: p * 0.92, dur: 0.95 * rnd(0.9, 1.1),
+        vol: v, a: 0.12, d: 0.2, s: 0.7, r: 0.4, noiseMix: 0.55, send: 0.25, jitter: 0.08 });   // noise-heavy = breath, not organ
+    });
+  }
+  function crowdGasp() {                             // louder shocked collective gasp on an interception
+    if (muted || typeof zzfxX === 'undefined') return;
+    noiseHit(1200, 0.8, 'bandpass', 0.18, 0.12, [600, 1800]);    // the collective inhale
+    [110, 131, 165, 123, 98, 147, 175].forEach(function (p) {    // open /a/, fast attack = everyone at once
+      formant({ vowel: 'ah', f0: p * rnd(0.85, 1.15), slideTo: p * 0.9, dur: 1.25 * rnd(0.9, 1.1),
+        vol: 0.06, a: 0.02, d: 0.15, s: 0.8, r: 0.5, noiseMix: 0.50, send: 0.3, jitter: 0.08 });
+    });
+    crowd('groan');                                  // the sinking bed
+    thump(180, 55, 0.5, 0.22);                        // the gut-drop
+  }
+
   // ---- speechSynthesis announcer (the big beats only — NBA-Jam restraint) ----
   var PHRASES = {
     td:   ['Touchdown!', 'He could go all the way!', 'Boom! Six points!'],
@@ -512,5 +617,5 @@
   function musicStart() { if (mTimer || muted) return; ensureUnlock(); musicNote(); mTimer = setInterval(musicNote, 300); }
   function musicStop() { if (mTimer) { clearInterval(mTimer); mTimer = 0; } }
 
-  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, musicStart: musicStart, musicStop: musicStop };
+  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, musicStart: musicStart, musicStop: musicStop, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant };
 })(window);

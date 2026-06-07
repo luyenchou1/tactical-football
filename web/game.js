@@ -318,6 +318,9 @@
   function fanfare() { if (window.Sound) Sound.fanfare(); }
   function whoosh() { if (window.Sound) Sound.whoosh(); }
   function ding() { if (window.Sound) Sound.ding(); }
+  function tackle(b) { if (window.Sound) Sound.tackle(b); }
+  function crowdOhh(l) { if (window.Sound) Sound.crowdOhh(l); }
+  function crowdGasp() { if (window.Sound) Sound.crowdGasp(); }
 
   const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
@@ -971,7 +974,7 @@
     try { const cm = buildCommentary(analyzePlay(result)); commentaryEl.textContent = cm.text; commentaryEl.dataset.cause = cm.cause; popIn(commentaryEl); } catch (e) { commentaryEl.textContent = ''; }
     buzz(driveResult === 'td' ? [40, 30, 70] : (o === 'interception' || o === 'sack') ? [70] : o === 'completion' ? 12 : 0);
     if (driveResult === 'td') { celebrateTD(); }
-    else if (o === 'interception') { crowd('groan'); announce('int'); callout('int'); streak = 0; setOnFire(false); }
+    else if (o === 'interception') { crowdGasp(); announce('int'); callout('int'); streak = 0; setOnFire(false); }
     else if (o === 'sack') { crowd('groan'); announce('sack'); callout('sack'); streak = 0; setOnFire(false); }
     else if (o === 'completion') {
       const gain = result.yards | 0;
@@ -981,7 +984,7 @@
       const onFireNow = clean && streak >= 3;
       if (onFireNow) setOnFire(true);
       // one headline callout, by priority: explosive > on-fire > heating > first down > clean dime
-      if (explosive) { callout('bigplay'); whoosh(); crowd('swell'); addTrauma(0.45); burstAt('big', 26.6, 10); }
+      if (explosive) { callout('bigplay'); whoosh(); crowd('swell'); addTrauma(0.45); burstAt('big', 26.6, 10); setTimeout(function () { tackle(true); }, 280); }
       else if (onFireNow) { callout('fire'); }
       else if (clean && streak === 2) { callout('heating'); }
       else if (firstDownThisPlay) { callout('first'); ding(); }
@@ -993,7 +996,7 @@
         else if (clean && !firstDownThisPlay) announce('dime');
       }, explosive ? 180 : 0);
     }
-    else { streak = 0; setOnFire(false); }   // incomplete / pbu breaks the streak
+    else { crowdOhh(o === 'pbu'); streak = 0; setOnFire(false); }   // incomplete / pbu — the crowd groans (louder on a broken-up ball)
 
     if (driveOver) {
       if (driveResult === 'td')         { driveBanner.className = 'td';       driveBanner.textContent = '🏈 TOUCHDOWN  +7'; }
