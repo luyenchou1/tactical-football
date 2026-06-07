@@ -201,7 +201,7 @@
         amp.connect(lp); node = lp;
       }
       if (o.dist) { var ws = c.createWaveShaper(); ws.curve = distCurve(o.dist); ws.oversample = '2x'; node.connect(ws); node = ws; }
-      node.connect(busIn());
+      node.connect(o.bus || busIn());   // o.bus routes a voice to a sub-bus (e.g. the music bed)
       if (o.send) { var sg = c.createGain(); sg.gain.value = o.send; node.connect(sg); sg.connect(reverbIn()); }
 
       var uni = o.uni || [0], carriers = [];
@@ -605,17 +605,131 @@
     if (!document.hidden && unlocked) { try { if (zzfxX.state !== 'running') zzfxX.resume(); } catch (e) {} }
   });
 
-  // ---------- minimal menu music (procedural — a gentle loop that ducks during the reveal) ----------
-  var MUSIC = [220, 262, 330, 262, 196, 247, 294, 247];   // soft Am↔G arpeggio
-  var mStep = 0, mTimer = 0;
-  var NOTE = [0.05, .02, 0, .01, .08, .12, 1, .8];        // low-volume triangle pluck
-  function musicNote() {
-    if (muted || typeof zzfx === 'undefined') return;
-    try { var p = NOTE.slice(); p[2] = MUSIC[mStep % MUSIC.length]; p[17] = .35; p[18] = .03; zzfx.apply(null, p); } catch (e) {}
-    mStep++;
-  }
-  function musicStart() { if (mTimer || muted) return; ensureUnlock(); musicNote(); mTimer = setInterval(musicNote, 300); }
-  function musicStop() { if (mTimer) { clearInterval(mTimer); mTimer = 0; } }
+  // ---------- ambient crowd murmur bed + NFL-Films-style music bed ----------
+  //   Two persistent beds on their OWN gain buses so duck() dips them on the snap
+  //   and unduck() swells them back between plays. Music voices route via
+  //   synth({bus}) into _musicBus (self-contained). The murmur starts ONCE and is
+  //   level-driven by duck/unduck — never reallocated per play. Both stop cleanly
+  //   on mute / gameover. (Replaces the old menu arpeggio.)
+  var MUSIC_VOL = 0.35, AMBIENT_VOL = 0.05, AMBIENT_DUCK = 0.014;
+  var _ambientGain = null, _musicBus = null, _murmur = null;
+  var _musicOn = false, _musicTimer = 0, _midTimer = 0;
 
-  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, musicStart: musicStart, musicStop: musicStop, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant };
+  function ambientGain() {                      // murmur bus (null fallback — never alias the master)
+    if (_ambientGain) return _ambientGain;
+    try { _ambientGain = zzfxX.createGain(); _ambientGain.gain.value = 0.0001; _ambientGain.connect(busIn()); }
+    catch (e) { _ambientGain = null; }
+    return _ambientGain;
+  }
+  function musicBus() {                          // music bus (null fallback)
+    if (_musicBus) return _musicBus;
+    try { _musicBus = zzfxX.createGain(); _musicBus.gain.value = MUSIC_VOL; _musicBus.connect(busIn()); }
+    catch (e) { _musicBus = null; }
+    return _musicBus;
+  }
+  function brownBuffer(sec) {                    // brown noise = a soft, hiss-free distant babble
+    var c = zzfxX, sr = c.sampleRate, n = Math.max(1, (sr * sec) | 0), b = c.createBuffer(1, n, sr), d = b.getChannelData(0), last = 0;
+    for (var i = 0; i < n; i++) { var w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
+    return b;
+  }
+  function murmurStart() {                       // start the persistent bed ONCE
+    if (muted || typeof zzfxX === 'undefined' || _murmur) return;
+    ensureUnlock();
+    var ag = ambientGain(); if (!ag) return;
+    try {
+      var c = zzfxX, t = c.currentTime;
+      var src = c.createBufferSource(); src.buffer = brownBuffer(3.0); src.loop = true;
+      var src2 = c.createBufferSource(); src2.buffer = src.buffer; src2.loop = true; src2.playbackRate.value = 1.004;  // detuned twin = babble
+      var bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 550; bp.Q.value = 0.6;
+      var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100; lp.Q.value = 0.7;
+      var lfoG = c.createGain(); lfoG.gain.value = 1.0;        // the LFO rides HERE, leaving ag.gain pure for duck/stop
+      src.connect(bp); src2.connect(bp); bp.connect(lp); lp.connect(lfoG); lfoG.connect(ag);
+      var rs = c.createGain(); rs.gain.value = 0.18; lp.connect(rs); rs.connect(reverbIn());   // a little room
+      ag.gain.cancelScheduledValues(t); ag.gain.setValueAtTime(Math.max(0.0001, ag.gain.value), t);
+      ag.gain.linearRampToValueAtTime(AMBIENT_VOL, t + 0.8);   // swell in (no click)
+      var lfo1 = c.createOscillator(); lfo1.type = 'sine'; lfo1.frequency.value = 0.12;        // slow level breathe
+      var l1g = c.createGain(); l1g.gain.value = 0.06; lfo1.connect(l1g); l1g.connect(lfoG.gain); lfo1.start(t);
+      var lfo2 = c.createOscillator(); lfo2.type = 'sine'; lfo2.frequency.value = 0.2;         // slow timbre drift
+      var l2g = c.createGain(); l2g.gain.value = 180; lfo2.connect(l2g); l2g.connect(bp.frequency); lfo2.start(t);
+      src.start(t); src2.start(t);
+      _murmur = { nodes: [src, src2, lfo1, lfo2] };
+    } catch (e) {}
+  }
+  function murmurStop() {
+    if (!_murmur) return;
+    try {
+      var c = zzfxX, t = c.currentTime;
+      if (_ambientGain) { _ambientGain.gain.cancelScheduledValues(t); _ambientGain.gain.setValueAtTime(Math.max(0.0001, _ambientGain.gain.value), t); _ambientGain.gain.linearRampToValueAtTime(0.0001, t + 0.3); }
+      var st = t + 0.34;
+      _murmur.nodes.forEach(function (n) { try { n.stop(st); } catch (e) {} });
+    } catch (e) {}
+    _murmur = null;
+  }
+  function duck() {                              // snap: music -> silent, murmur -> a low floor
+    if (typeof zzfxX === 'undefined') return;
+    try {
+      var t = zzfxX.currentTime;
+      if (_musicBus) { _musicBus.gain.cancelScheduledValues(t); _musicBus.gain.setTargetAtTime(0.0001, t, 0.05); }
+      if (_ambientGain && _murmur) { _ambientGain.gain.cancelScheduledValues(t); _ambientGain.gain.setTargetAtTime(AMBIENT_DUCK, t, 0.05); }
+    } catch (e) {}
+  }
+  function unduck() {                            // between plays: swell both back
+    if (typeof zzfxX === 'undefined') return;
+    try {
+      var t = zzfxX.currentTime;
+      if (_musicBus && _musicOn) { _musicBus.gain.cancelScheduledValues(t); _musicBus.gain.setTargetAtTime(MUSIC_VOL, t, 0.4); }
+      if (_ambientGain && _murmur) { _ambientGain.gain.cancelScheduledValues(t); _ambientGain.gain.setTargetAtTime(AMBIENT_VOL, t, 0.5); }
+    } catch (e) {}
+  }
+
+  // NFL-Films-style bed: heroic-minor 4-chord loop Gm-Eb-Bb-Dm, brass + string pad
+  // + timpani, all via _musicBus. The scheduler keeps RUNNING while ducked so the
+  // music resumes mid-phrase between plays.
+  var CH = { Gm: [98.0, 116.5, 146.8], Eb: [77.8, 98.0, 116.5], Bb: [116.5, 146.8, 174.6], Dm: [73.4, 87.3, 110.0] };
+  var SEQ = ['Gm', 'Eb', 'Bb', 'Dm'], ROOTS = [49.0, 77.8, 58.3, 73.4];
+  var BEAT = 0.682, BAR_MS = Math.round(BEAT * 4 * 1000);
+  function mBrass(name) {                        // detuned-saw "horns": amp attacks fast, filter opens slow = stately
+    chord(CH[name], { bus: musicBus(), type: 'sawtooth', uni: [-7, 0, 7], fm: { ratio: 1, index: 0.5, decay: 0.4 },
+      a: 0.09, d: 0.15, s: 0.85, r: 0.5, dur: 2.6, vol: 0.06, filt: { f0: 600, f1: 3200, q: 1.5 }, send: 0.2 });
+  }
+  function mPad(name) {                          // soft octave-up string pad
+    chord(CH[name].map(function (n) { return n * 2; }), { bus: musicBus(), type: 'sawtooth', uni: [-9, 0, 9],
+      a: 0.9, d: 0.3, s: 0.9, r: 1.0, dur: 2.7, vol: 0.04, filt: { f0: 900, f1: 1600, q: 0.7 }, send: 0.4 });
+  }
+  function mTimpani(R, vol) {                     // pitched sine body (drops) + 2 inharmonic partials
+    var bus = musicBus();
+    synth({ bus: bus, f: R, type: 'sine', slideTo: R * 0.94, a: 0.002, d: 0.12, s: 0.15, r: 0.3, dur: 0.3, vol: 0.5 * vol });
+    [[R * 1.5, 0.05], [R * 1.98, 0.04]].forEach(function (p) {
+      synth({ bus: bus, f: p[0], type: 'sine', a: 0.002, d: 0.06, s: 0.1, r: 0.18, dur: 0.12, vol: p[1] * vol });
+    });
+  }
+  function musicBar(i) {
+    if (!_musicOn || muted) { _musicTimer = 0; return; }
+    var name = SEQ[i % 4], root = ROOTS[i % 4];
+    try {
+      mPad(name); mBrass(name); mTimpani(root, 1);
+      _midTimer = setTimeout(function () { if (_musicOn && !muted) mTimpani(root, 0.6); }, Math.round(2 * BEAT * 1000));  // beat-3 march pulse (tracked)
+    } catch (e) {}
+    _musicTimer = setTimeout(function () { musicBar(i + 1); }, BAR_MS);
+  }
+  function musicBedStop() {
+    _musicOn = false;
+    if (_musicTimer) { clearTimeout(_musicTimer); _musicTimer = 0; }
+    if (_midTimer) { clearTimeout(_midTimer); _midTimer = 0; }
+    if (_musicBus) { try { var t = zzfxX.currentTime; _musicBus.gain.cancelScheduledValues(t); _musicBus.gain.setTargetAtTime(0.0001, t, 0.25); } catch (e) {} }
+  }
+
+  // public lifecycle (setStage drives these): both beds together; idempotent start.
+  function musicStart() {
+    if (muted || typeof zzfxX === 'undefined') return;
+    ensureUnlock();
+    if (!_musicOn) {
+      var bus = musicBus();
+      if (bus) { _musicOn = true; try { var t = zzfxX.currentTime; bus.gain.cancelScheduledValues(t); bus.gain.setTargetAtTime(MUSIC_VOL, t, 0.4); } catch (e) {} musicBar(0); }
+    }
+    murmurStart();
+  }
+  function musicStop() { musicBedStop(); murmurStop(); }
+
+  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, musicStart: musicStart, musicStop: musicStop, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, murmurStart: murmurStart, murmurStop: murmurStop, duck: duck, unduck: unduck };
 })(window);
