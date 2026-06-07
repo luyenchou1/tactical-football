@@ -355,7 +355,9 @@ html, body {
 @keyframes chip-spike { 0% { translate: 0 0; scale: 1; rotate: 0deg; } 22% { translate: 0 -16px; scale: 1.5; rotate: -12deg; filter: brightness(1.9); } 52% { translate: 0 -6px; scale: 1.28; rotate: 9deg; } 100% { translate: 0 0; scale: 1; rotate: 0deg; filter: brightness(1); } }
 .chip.slump { animation: chip-slump .85s ease-out; }
 @keyframes chip-slump { 0% { translate: 0 0; filter: none; } 40% { translate: 0 4px; scale: .92; filter: saturate(.35) brightness(.6); } 100% { translate: 0 0; scale: 1; filter: none; } }
-@media (prefers-reduced-motion: reduce) { .chip.celebrate, .chip.squash, .chip.spike, .chip.slump { animation: none; } }
+.chip.rushing { animation: chip-rush .7s ease-in-out infinite alternate; }
+@keyframes chip-rush { from { box-shadow: 0 0 4px #ff3b00, inset 0 2px 0 rgba(255,255,255,.3), 0 3px 0 rgba(0,0,0,.45); } to { box-shadow: 0 0 11px #ff3b00, 0 0 20px rgba(255,59,0,.7), inset 0 2px 0 rgba(255,255,255,.3), 0 3px 0 rgba(0,0,0,.45); } }
+@media (prefers-reduced-motion: reduce) { .chip.celebrate, .chip.squash, .chip.spike, .chip.slump { animation: none; } .chip.rushing { animation: none; box-shadow: 0 0 10px #ff3b00, inset 0 2px 0 rgba(255,255,255,.3), 0 3px 0 rgba(0,0,0,.45); } }
 
 /* NBA-Jam SLAM callout (over the field) */
 .callout {

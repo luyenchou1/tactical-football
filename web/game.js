@@ -657,7 +657,7 @@
           const c = chips[e.chip];
           if (c) { c.classList.remove('tappable'); delete c.dataset.postag; }
         });
-        FORMATION.forEach(function (p) { if (chips[p.id]) chips[p.id].classList.remove('faded'); });
+        FORMATION.forEach(function (p) { if (chips[p.id]) chips[p.id].classList.remove('faded', 'rushing'); });
         if (pressureFill) { pressureFill.style.transition = 'none'; pressureFill.classList.remove('danger'); }
         if (targetKey) sfx('throw');
         resolve({ targetKey: targetKey });
@@ -683,10 +683,13 @@
         const c = chips[e.chip]; if (c) { c.classList.add('tappable'); c.dataset.postag = e.pos; }
       });
 
-      // dim everyone but the 5 receiver↔defender matchups so separation reads clearly
+      // dim everyone but the 5 receiver↔defender matchups so separation reads clearly —
+      // except the blitzer, who's making a play on the QB: keep him lit and flag the pressure
       const focus = {};
       ELIGIBLE.forEach(function (e) { focus[e.chip] = 1; focus[e.defChip] = 1; });
+      if (coverage === 'blitz') focus.SLB = 1;
       FORMATION.forEach(function (p) { if (!focus[p.id] && chips[p.id]) chips[p.id].classList.add('faded'); });
+      if (coverage === 'blitz' && chips.SLB) chips.SLB.classList.add('rushing');
 
       // routes develop (place at points 1→3); openness now reads off the defenders' separation
       [1, 2, 3].forEach(function (p, i) {
@@ -920,7 +923,8 @@
     // dim the front so the receiver↔defender matchups read clearly through the middle on replay
     const rpFocus = {};
     ELIGIBLE.forEach(function (e) { rpFocus[e.chip] = 1; rpFocus[e.defChip] = 1; });
-    FORMATION.forEach(function (p) { if (chips[p.id]) chips[p.id].classList.toggle('faded', !rpFocus[p.id]); });
+    if (coverage === 'blitz') rpFocus.SLB = 1;                              // keep the blitzer lit in the replay too
+    FORMATION.forEach(function (p) { if (chips[p.id]) { chips[p.id].classList.toggle('faded', !rpFocus[p.id]); chips[p.id].classList.toggle('rushing', coverage === 'blitz' && p.id === 'SLB'); } });
   }
 
   function renderReplayFrame(i) {
@@ -947,7 +951,7 @@
   }
   function rpStep(d) { rpPause(); renderReplayFrame(rpFrame + d); }
   function rpScrubTo(v) { rpPause(); renderReplayFrame(parseInt(v, 10) || 0); }
-  function rpTeardown() { rpPause(); if (breakdownEl) breakdownEl.querySelectorAll('.bd-row.active').forEach(function (r) { r.classList.remove('active'); }); FORMATION.forEach(function (p) { if (chips[p.id]) chips[p.id].classList.remove('faded'); }); }
+  function rpTeardown() { rpPause(); if (breakdownEl) breakdownEl.querySelectorAll('.bd-row.active').forEach(function (r) { r.classList.remove('active'); }); FORMATION.forEach(function (p) { if (chips[p.id]) chips[p.id].classList.remove('faded', 'rushing'); }); }
 
   function showResult(result) {
     setStage('postplay');
