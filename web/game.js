@@ -184,12 +184,12 @@
     };
     if (look === 'blitz') posOv.SLB = [31, 1.7];         // a linebacker shows pressure in the gap
     const shade = {};
-    if (revealed && coverage === 'man') {                // leverage is a post-snap tell
+    if (look === 'man' || look === 'blitz') {            // leverage is a man/blitz read — shown pre-snap as a cue
       MAN_SHADE.forEach(function (e) {
         const rx = baseX[e.chip];
         const sideline = rx < CENTER ? -1 : 1;
         const dir = (levMap[e.defKey] === 'outside') ? sideline : -sideline;
-        shade[e.defChip] = rx + dir * 2.8;
+        shade[e.defChip] = rx + dir * 3.2;
       });
     }
     FORMATION.forEach(function (p) {
@@ -575,7 +575,9 @@
       let dx = cur[0] - prev[0], dy = cur[1] - prev[1];
       const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;            // unit direction of travel
       const gap = 0.3 + openness[e.key] * 3.6;                               // yards of separation (open man pulls clearly away)
-      return [cur[0] - dx * gap, cur[1] - dy * gap];
+      const res = [cur[0] - dx * gap, cur[1] - dy * gap];
+      if (e.key === 'rb') res[1] = Math.max(res[1], 5 * (1 - i / 3));        // MLB starts at LB depth, closes as the RB releases (not the backfield)
+      return res;
     }
     return { paths: paths, defDrop: defDrop, status: status, openness: openness };
   }
