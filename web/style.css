@@ -436,6 +436,7 @@ html, body {
 #field.reading .chip { transition: left .26s linear, top .26s linear, scale .18s ease; }
 .chip.tappable { cursor: pointer; }
 .chip.faded { opacity: .28; filter: saturate(.5); transition: opacity .3s ease; }   /* non-matchup players recede during the read */
+.chip.lineman { z-index: 1; }   /* the front sits below the route layer (z2) so crossing routes stay visible over the line */
 .chip.tappable::after {
   content: attr(data-postag);
   position: absolute; top: -12px; left: 50%; transform: translateX(-50%);

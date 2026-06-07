@@ -57,6 +57,7 @@
   const elgByKey = {}; ELIGIBLE.forEach(function (e) { elgByKey[e.key] = e; });
   // man defenders we visibly shade by leverage (skip MLB — it keys the RB underneath)
   const MAN_SHADE = ELIGIBLE.filter(function (e) { return e.key !== 'rb'; });
+  const LINEMEN = { C: 1, LG: 1, RG: 1, LT: 1, RT: 1, DE_L: 1, DT_L: 1, DT_R: 1, DE_R: 1 };   // the front — renders below the route layer so crossing routes stay visible
 
   // ---------- playbook ----------
   const PLAYS = [
@@ -149,7 +150,7 @@
   function buildChips() {
     FORMATION.forEach(function (p) {
       const el = document.createElement('div');
-      el.className = 'chip ' + p.team + (p.simKey ? ' key' : '');
+      el.className = 'chip ' + p.team + (p.simKey ? ' key' : '') + (LINEMEN[p.id] ? ' lineman' : '');
       el.dataset.id = p.id;
       el.textContent = p.num;
       el.addEventListener('click', function (e) { e.stopPropagation(); showCard(p); });
@@ -885,6 +886,10 @@
       { render: tickFrame(4), cap: rpSc.captions[4] || '', key: rpSc.sacked ? 'pressure' : (rpSc.intercepted || o === 'pbu') ? 'contest' : 'catch' },
       { render: tickFrame(5), cap: rpSc.captions[5] || (o === 'completion' ? 'After the catch' : ''), key: rpSc.caught ? 'yac' : (rpSc.sacked ? 'pressure' : 'catch') },
     ];
+    // dim the front so the receiver↔defender matchups read clearly through the middle on replay
+    const rpFocus = {};
+    ELIGIBLE.forEach(function (e) { rpFocus[e.chip] = 1; rpFocus[e.defChip] = 1; });
+    FORMATION.forEach(function (p) { if (chips[p.id]) chips[p.id].classList.toggle('faded', !rpFocus[p.id]); });
   }
 
   function renderReplayFrame(i) {
@@ -911,7 +916,7 @@
   }
   function rpStep(d) { rpPause(); renderReplayFrame(rpFrame + d); }
   function rpScrubTo(v) { rpPause(); renderReplayFrame(parseInt(v, 10) || 0); }
-  function rpTeardown() { rpPause(); if (breakdownEl) breakdownEl.querySelectorAll('.bd-row.active').forEach(function (r) { r.classList.remove('active'); }); }
+  function rpTeardown() { rpPause(); if (breakdownEl) breakdownEl.querySelectorAll('.bd-row.active').forEach(function (r) { r.classList.remove('active'); }); FORMATION.forEach(function (p) { if (chips[p.id]) chips[p.id].classList.remove('faded'); }); }
 
   function showResult(result) {
     setStage('postplay');
