@@ -419,15 +419,18 @@ html, body {
 #commentary[data-cause="PERSONNEL"] { color: #ffc2b3; }
 #commentary[data-cause="LUCK"]      { color: #cdd7e3; }
 #commentary[data-cause="EXECUTION"] { color: #cdd7e3; }
-#tape { margin: 4px 0 2px; border-radius: 8px; overflow: hidden; }
-#tape > summary {
-  cursor: pointer; list-style: none; padding: 7px 10px; text-align: center;
-  font-family: var(--font-arcade); font-size: 8px; letter-spacing: .06em;
-  color: var(--muted); user-select: none;
+/* instant replay controls */
+#replay { margin: 4px 0 2px; }
+#replay-bar { display: flex; align-items: center; gap: 8px; padding: 2px 0 8px; }
+.rp-btn {
+  font-family: var(--font-arcade); font-size: 11px; color: #fff;
+  background: #2a3340; border: 2px solid #000; border-radius: 6px;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, .5); padding: 7px 9px; cursor: pointer; min-width: 36px; line-height: 1;
 }
-#tape > summary::-webkit-details-marker { display: none; }
-#tape > summary::after { content: ' \25B8'; }
-#tape[open] > summary::after { content: ' \25BE'; }
+.rp-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, .5); }
+#rp-scrub { flex: 1 1 0; min-width: 0; height: 6px; accent-color: var(--star); cursor: pointer; }
+#rp-caption { text-align: center; font-family: var(--font-arcade); font-size: 8px; color: var(--star); min-height: 12px; padding-bottom: 6px; }
+.bd-row.active { box-shadow: inset 3px 0 0 var(--star); background: rgba(248, 184, 0, .08); }
 
 /* tappable receivers wear a small position tag so the field maps to the target row */
 #field.reading .chip { transition: left .26s linear, top .26s linear, scale .18s ease; }

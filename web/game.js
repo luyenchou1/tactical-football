@@ -104,6 +104,9 @@
   const resultLine = document.getElementById('result-line');
   const breakdownEl = document.getElementById('breakdown');
   const commentaryEl = document.getElementById('commentary');
+  const rpPlayBtn = document.getElementById('rp-play');
+  const rpCaptionEl = document.getElementById('rp-caption');
+  const rpScrub = document.getElementById('rp-scrub');
   const snapBtn = document.getElementById('snap-btn');
   const nextBtn = document.getElementById('next-btn');
   const newGameBtn = document.getElementById('new-game-btn');
@@ -128,6 +131,7 @@
   let chosenPlay = null, chosenTarget = null;
   let revealed = false;              // disguise: true once the snap declares the coverage
   let shownLook = 'man';             // the pre-snap look the defense presents (can bluff the true call)
+  let lastResult = null;             // the last resolved play, for the instant replay
   let down = 1, distance = 10, ballOn = 25;
   let score = 0;
   let drivePlays = 0, driveStartYard = 25;
@@ -856,8 +860,60 @@
     return { text: text, cause: a.cause };
   }
 
+  // ---------- instant replay ----------
+  // Rebuilds the just-run play from the deterministic builders and steps it frame-by-frame
+  // on the field under manual controls. Frames 0–3 are the read (routes develop, the gaps
+  // the player saw); 4–6 are the throw → result. No engine state, no new animation math.
+  let rpPre = null, rpSc = null, rpFrames = [], rpFrame = 0, rpTimer = 0;
+
+  function buildReplay() {
+    rpFrames = [];
+    if (!lastResult || !chosenPlay) return;
+    rpPre = buildPreThrow();
+    rpSc = buildScript(lastResult, chosenTarget);
+    const o = lastResult.outcome;
+    const readFrame = function (t) { return function () { placeReadTick(rpPre, t); ballEl.style.opacity = '1'; placeBall(26.6, -3); }; };
+    const tickFrame = function (t) { return function () { placeTick(rpSc, t); }; };
+    rpFrames = [
+      { render: readFrame(0), cap: 'Snap', key: 'read' },
+      { render: readFrame(1), cap: 'Routes develop', key: 'separation' },
+      { render: readFrame(2), cap: 'Routes develop', key: 'separation' },
+      { render: readFrame(3), cap: 'The read — who’s open?', key: 'separation' },
+      { render: tickFrame(3), cap: rpSc.captions[3] || 'Throw', key: rpSc.sacked ? 'pressure' : 'throw' },
+      { render: tickFrame(4), cap: rpSc.captions[4] || '', key: rpSc.sacked ? 'pressure' : (rpSc.intercepted || o === 'pbu') ? 'contest' : 'catch' },
+      { render: tickFrame(5), cap: rpSc.captions[5] || (o === 'completion' ? 'After the catch' : ''), key: rpSc.caught ? 'yac' : (rpSc.sacked ? 'pressure' : 'catch') },
+    ];
+  }
+
+  function renderReplayFrame(i) {
+    if (!rpFrames.length) return;
+    rpFrame = Math.max(0, Math.min(rpFrames.length - 1, i));
+    rpFrames[rpFrame].render();
+    if (rpCaptionEl) rpCaptionEl.textContent = rpFrames[rpFrame].cap || '';
+    if (rpScrub) rpScrub.value = String(rpFrame);
+    const key = rpFrames[rpFrame].key;
+    if (breakdownEl) breakdownEl.querySelectorAll('.bd-row').forEach(function (r) { r.classList.toggle('active', r.dataset.key === key); });
+  }
+
+  function rpPause() { if (rpTimer) { clearInterval(rpTimer); rpTimer = 0; } if (rpPlayBtn) rpPlayBtn.textContent = '▶'; }
+  function rpPlay() {
+    if (!rpFrames.length) return;
+    if (rpTimer) { rpPause(); return; }                         // toggle
+    if (rpFrame >= rpFrames.length - 1) renderReplayFrame(0);   // rewind from the end
+    if (rpPlayBtn) rpPlayBtn.textContent = '⏸';
+    rpTimer = setInterval(function () {
+      if (rpFrame >= rpFrames.length - 1) { rpPause(); return; }
+      renderReplayFrame(rpFrame + 1);
+      if (rpFrame === 5) { const o = lastResult.outcome; sfx(o === 'completion' ? 'catch' : o === 'interception' ? 'int' : o === 'sack' ? 'sack' : 'pbu'); }
+    }, 720);
+  }
+  function rpStep(d) { rpPause(); renderReplayFrame(rpFrame + d); }
+  function rpScrubTo(v) { rpPause(); renderReplayFrame(parseInt(v, 10) || 0); }
+  function rpTeardown() { rpPause(); if (breakdownEl) breakdownEl.querySelectorAll('.bd-row.active').forEach(function (r) { r.classList.remove('active'); }); }
+
   function showResult(result) {
     setStage('postplay');
+    lastResult = result;
     advanceDown(result);
 
     const o = result.outcome;
@@ -898,7 +954,7 @@
     breakdownEl.innerHTML = '';
     result.chain.forEach(function (step) {
       const row = document.createElement('div');
-      row.className = 'bd-row';
+      row.className = 'bd-row'; row.dataset.key = step.key;
       row.innerHTML =
         '<div class="bd-head"><span class="bd-dot ' + (step.status || 'neutral') + '"></span>' +
         '<span class="bd-label">' + step.label + '</span>' +
@@ -908,6 +964,8 @@
       row.addEventListener('click', function () { row.classList.toggle('open'); });
       breakdownEl.appendChild(row);
     });
+    buildReplay();
+    if (rpFrames.length) renderReplayFrame(rpFrames.length - 1);
   }
 
   // ---------- drive + scoreboard ----------
@@ -942,6 +1000,7 @@
   }
 
   function setStage(name) {
+    if (name !== 'postplay') rpTeardown();
     Object.keys(panel).forEach(function (k) { panel[k].classList.toggle('hidden', k !== name); });
     // menu music plays only while you're reading the defense; it ducks for the reveal
     if (window.Sound) { if (name === 'presnap') Sound.musicStart(); else Sound.musicStop(); }
@@ -1175,6 +1234,12 @@
     else startDrive();
   });
   newGameBtn.addEventListener('click', function () { sfx('ui'); newGame(); });
+
+  // instant replay controls
+  if (rpPlayBtn) rpPlayBtn.addEventListener('click', function () { sfx('ui'); rpPlay(); });
+  const rpBackBtn = document.getElementById('rp-back'); if (rpBackBtn) rpBackBtn.addEventListener('click', function () { rpStep(-1); });
+  const rpFwdBtn = document.getElementById('rp-fwd'); if (rpFwdBtn) rpFwdBtn.addEventListener('click', function () { rpStep(1); });
+  if (rpScrub) rpScrub.addEventListener('input', function () { rpScrubTo(rpScrub.value); });
 
   // ---------- sound mute toggle ----------
   const muteBtn = document.getElementById('mute-btn');

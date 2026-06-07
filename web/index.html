@@ -85,10 +85,16 @@
         <div id="result-line">Completion +8</div>
         <div id="commentary"></div>
         <div id="drive-banner" class="hidden"></div>
-        <details id="tape">
-          <summary>Show the tape</summary>
+        <div id="replay">
+          <div id="replay-bar">
+            <button id="rp-play" class="rp-btn" aria-label="Play replay">▶</button>
+            <button id="rp-back" class="rp-btn" aria-label="Step back">‹</button>
+            <button id="rp-fwd" class="rp-btn" aria-label="Step forward">›</button>
+            <input id="rp-scrub" type="range" min="0" max="6" value="6" step="1" aria-label="Replay timeline">
+          </div>
+          <div id="rp-caption">Instant replay</div>
           <div id="breakdown"></div>
-        </details>
+        </div>
         <button id="next-btn">Next play ›</button>
       </div>
 
