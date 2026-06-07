@@ -104,7 +104,7 @@ html, body {
 /* line-of-scrimmage + first-down markers (positioned by JS via --los-top etc) */
 .fieldline {
   position: absolute; left: 0; right: 0; height: 2px;
-  z-index: 1; pointer-events: none;
+  z-index: 0; pointer-events: none; /* a field marking: below the linemen (z1) so players stand on the line */
 }
 .fieldline.los { background: var(--los); }
 .fieldline.first { background: var(--first-down); }
