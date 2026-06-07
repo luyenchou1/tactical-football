@@ -314,6 +314,10 @@
   function popIn(el) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
   function sfx(n) { if (window.Sound) Sound.sfx(n); }
   function announce(k) { if (window.Sound) Sound.announce(k); }
+  function crowd(k) { if (window.Sound) Sound.crowd(k); }
+  function fanfare() { if (window.Sound) Sound.fanfare(); }
+  function whoosh() { if (window.Sound) Sound.whoosh(); }
+  function ding() { if (window.Sound) Sound.ding(); }
 
   const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
@@ -356,6 +360,7 @@
     sack:  ['SACKED!', 'GOT HIM!', 'BURIED!'],
     dime:  ['DIME!', 'ON THE MONEY!', 'WHAT A READ!'],
     first: ['FIRST DOWN!', 'MOVE THE CHAINS!'],
+    bigplay: ['BIG PLAY!', 'CHUNK GAIN!', 'EXPLOSIVE!'],
     heating: ['HEATING UP...'],
     fire: ['ON FIRE! 🔥', "HE'S ON FIRE!"],
   };
@@ -436,6 +441,8 @@
       fxSpawn(22, x, y, { up: false, spdMin: 2, spdMax: 5, g: .2, drag: .92, life: 42, size: 5, colors: ['#e40058', '#ff5a3c', '#fcfcfc'] });
     } else if (kind === 'catch') {
       fxSpawn(15, x, y, { up: false, spdMin: 1.5, spdMax: 3.5, g: .2, drag: .92, life: 28, size: 4, colors: ['#46ff7a', '#00b800', '#fcfcfc'] });
+    } else if (kind === 'big') {
+      fxSpawn(38, x, y, { up: true, spread: 1.6, lift: 2.5, spdMin: 2, spdMax: 5, g: .18, drag: .95, life: 55, size: 5, colors: ['#f8b800', '#f8d878', '#fcfcfc'] });
     }
   }
 
@@ -444,6 +451,23 @@
   function setOnFire(on) {
     onFire = on;
     ['X', 'Z', 'SLOT', 'TE', 'RB', 'QB'].forEach(function (id) { if (chips[id]) chips[id].classList.toggle('onfire', on); });
+  }
+
+  // ---------- touchdown: a choreographed ~1.5s beat instead of one simultaneous pop ----------
+  function slumpDefenders() {
+    ['CB_X', 'CB_Z', 'NB', 'SS', 'MLB', 'SLB', 'FS', 'DE_L', 'DE_R', 'DT_L', 'DT_R'].forEach(function (id) { if (chips[id]) chipFx(id, 'slump'); });
+  }
+  function celebrateTD() {
+    const scorer = (elgByKey[chosenTarget] || {}).chip;
+    sfx('td'); addTrauma(0.85); flash('#fcfcfc', 0.6, 200); callout('td');   // boom + white pop + the SLAM
+    if (scorer) chipFx(scorer, 'spike');                                      // the scorer leaps
+    slumpDefenders();                                                         // the coverage sags
+    setTimeout(fanfare, 110);                                                 // the jingle rings out
+    setTimeout(function () { burstAt('td', 26.6, 12); }, 150);               // confetti
+    setTimeout(function () { crowd('erupt'); }, 210);                        // the roar swells in
+    setTimeout(function () { announce('td'); }, 330);                        // the call, over the crowd
+    setTimeout(function () { popIn(document.getElementById('hud-score')); flash('#f8b800', 0.36, 280); }, 430);
+    setTimeout(function () { burstAt('td', 26.6, 12); }, 720);               // a second pop
   }
 
   function buildScript(result, targetKey) {
@@ -942,16 +966,29 @@
     popIn(resultLine);
     try { const cm = buildCommentary(analyzePlay(result)); commentaryEl.textContent = cm.text; commentaryEl.dataset.cause = cm.cause; popIn(commentaryEl); } catch (e) { commentaryEl.textContent = ''; }
     buzz(driveResult === 'td' ? [40, 30, 70] : (o === 'interception' || o === 'sack') ? [70] : o === 'completion' ? 12 : 0);
-    if (driveResult === 'td') { sfx('td'); sfx('crowd'); announce('td'); addTrauma(0.75); flash('#f8b800', 0.55, 220); callout('td'); burstAt('td', 26.6, 12); popIn(document.getElementById('hud-score')); }
-    else if (o === 'interception') { sfx('crowd'); announce('int'); callout('int'); streak = 0; setOnFire(false); }
-    else if (o === 'sack') { announce('sack'); callout('sack'); streak = 0; setOnFire(false); }
-    else if (o === 'completion' && result.meta.sep >= 2) {
-      streak++;
-      if (streak >= 3) { setOnFire(true); callout('fire'); announce('fire'); }
-      else if (streak === 2) { callout('heating'); announce('fire'); }
-      else { announce('dime'); callout('dime'); }
+    if (driveResult === 'td') { celebrateTD(); }
+    else if (o === 'interception') { crowd('groan'); announce('int'); callout('int'); streak = 0; setOnFire(false); }
+    else if (o === 'sack') { crowd('groan'); announce('sack'); callout('sack'); streak = 0; setOnFire(false); }
+    else if (o === 'completion') {
+      const gain = result.yards | 0;
+      const clean = result.meta.sep >= 2;        // won the matchup
+      const explosive = gain >= 20;              // a chunk play — the loudest non-TD beat
+      if (clean) { streak++; } else { streak = 0; setOnFire(false); }
+      const onFireNow = clean && streak >= 3;
+      if (onFireNow) setOnFire(true);
+      // one headline callout, by priority: explosive > on-fire > heating > first down > clean dime
+      if (explosive) { callout('bigplay'); whoosh(); crowd('swell'); addTrauma(0.45); burstAt('big', 26.6, 10); }
+      else if (onFireNow) { callout('fire'); }
+      else if (clean && streak === 2) { callout('heating'); }
+      else if (firstDownThisPlay) { callout('first'); ding(); }
+      else if (clean) { callout('dime'); }
+      // announcer VO, layered just behind the crowd
+      setTimeout(function () {
+        if (onFireNow) announce('fire');
+        else if (explosive) announce('big');
+        else if (clean && !firstDownThisPlay) announce('dime');
+      }, explosive ? 180 : 0);
     }
-    else if (o === 'completion') { if (firstDownThisPlay) callout('first'); }
     else { streak = 0; setOnFire(false); }   // incomplete / pbu breaks the streak
 
     if (driveOver) {

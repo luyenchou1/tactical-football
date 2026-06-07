@@ -66,12 +66,58 @@
     try { zzfx.apply(null, p); } catch (e) {}
   }
 
+  // ---- procedural crowd: filtered white-noise with a swept band + gain envelope, so the
+  //      stadium swells / erupts / groans instead of one flat burst (uses the ZzFX AudioContext) ----
+  function crowd(kind) {
+    if (muted || typeof zzfxX === 'undefined') return;
+    ensureUnlock();
+    var spec = {
+      murmur: { dur: 0.9, peak: 0.10, rise: 0.55, f0: 600,  f1: 600 },   // idle ambiance
+      swell:  { dur: 1.3, peak: 0.28, rise: 0.86, f0: 480,  f1: 1100 },  // builds — a deep ball hangs
+      erupt:  { dur: 2.0, peak: 0.55, rise: 0.10, f0: 1000, f1: 1500 },  // TD / big play roar
+      groan:  { dur: 1.1, peak: 0.20, rise: 0.16, f0: 440,  f1: 220 }    // INT / sack — sinks
+    }[kind];
+    if (!spec) return;
+    try {
+      var ctx = zzfxX, sr = ctx.sampleRate, n = Math.floor(sr * spec.dur);
+      var buf = ctx.createBuffer(1, n, sr), d = buf.getChannelData(0);
+      for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;          // white noise
+      var src = ctx.createBufferSource(); src.buffer = buf;
+      var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.7;
+      var t0 = ctx.currentTime;
+      bp.frequency.setValueAtTime(spec.f0, t0);
+      bp.frequency.linearRampToValueAtTime(spec.f1, t0 + spec.dur);      // tone sweep = the swell/erupt/groan shape
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t0);
+      g.gain.exponentialRampToValueAtTime(spec.peak, t0 + spec.dur * spec.rise);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + spec.dur);
+      src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+      src.start(t0); src.stop(t0 + spec.dur);
+    } catch (e) {}
+  }
+
+  // ---- richer one-shots: a TD fanfare jingle, a big-play riser, a first-down ding ----
+  function note(freq, vol, atk, sus, rel, shape) {
+    if (muted || typeof zzfx === 'undefined') return;
+    try { zzfx(vol, .05, freq, atk, sus, rel, shape, 1.6, 0, 0, 0, 0, 0, 0, 0, 0, 0, .6, .02); } catch (e) {}
+  }
+  function fanfare() {                                   // ascending major arpeggio C-E-G-C, then ring the top
+    [523, 659, 784, 1047].forEach(function (f, i) { setTimeout(function () { note(f, .42, .01, .07, .12, 1); }, i * 80); });
+    setTimeout(function () { note(1047, .5, .01, .22, .38, 1); }, 320);
+  }
+  function whoosh() {                                    // rising sweep — a chunk gainer
+    if (muted || typeof zzfx === 'undefined') return;
+    try { zzfx(.5, .05, 170, .02, .26, .3, 1, 1.2, 13, 7, 0, 0, .1, 0, 0, 0, 0, .5, .1); } catch (e) {}
+  }
+  function ding() { note(880, .4, .01, .04, .08, 1); setTimeout(function () { note(1320, .42, .01, .05, .12, 1); }, 70); }
+
   // ---- speechSynthesis announcer (the big beats only — NBA-Jam restraint) ----
   var PHRASES = {
     td:   ['Touchdown!', 'He could go all the way!', 'Boom! Six points!'],
     int:  ['Intercepted!', 'Picked off — he read it!', 'Oh, pick six!'],
     sack: ['Sacked!', 'Down goes the quarterback!', 'Got him!'],
     dime: ['Dime!', 'On the money!', 'What a read!'],
+    big:  ['Big gainer!', 'He has got room!', 'Chunk play — moving!'],
     fire: ['He is heating up!', 'He is on fire!'],
     win:  ['Game! You win!', 'Ball game!']
   };
@@ -84,8 +130,14 @@
   }
   if (hasSpeech) { pickVoice(); try { speechSynthesis.onvoiceschanged = pickVoice; } catch (e) {} }
 
+  // Recorded VO clips can drop in here later (kind -> [Audio]); empty today = procedural TTS.
+  var CLIPS = {};
+  function playClip(kind) { try { var a = CLIPS[kind][(vi++) % CLIPS[kind].length]; a.currentTime = 0; a.volume = 1; a.play(); } catch (e) {} }
+
   function announce(kind) {
-    if (muted || !hasSpeech) return;
+    if (muted) return;
+    if (CLIPS[kind] && CLIPS[kind].length) { playClip(kind); return; }   // a recorded VO clip wins when present
+    if (!hasSpeech) return;
     var pool = PHRASES[kind]; if (!pool) return;
     var line = pool[(vi++) % pool.length];
     try {
@@ -128,5 +180,5 @@
   function musicStart() { if (mTimer || muted) return; ensureUnlock(); musicNote(); mTimer = setInterval(musicNote, 300); }
   function musicStop() { if (mTimer) { clearInterval(mTimer); mTimer = 0; } }
 
-  root.Sound = { sfx: sfx, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, musicStart: musicStart, musicStop: musicStop };
+  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, musicStart: musicStart, musicStop: musicStop };
 })(window);

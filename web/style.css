@@ -351,7 +351,11 @@ html, body {
 .chip.squash { animation: chip-squash .4s ease-out; }
 @keyframes chip-squash { 0% { scale: 1 1; } 25% { scale: 1.35 .6; } 60% { scale: .9 1.1; } 100% { scale: 1 1; } }
 .chip.onfire { box-shadow: 0 0 8px #ff8a00, 0 0 16px #ff3b00, inset 0 2px 0 rgba(255,255,255,.35), 0 3px 0 rgba(0,0,0,.45); }
-@media (prefers-reduced-motion: reduce) { .chip.celebrate, .chip.squash { animation: none; } }
+.chip.spike { animation: chip-spike .9s cubic-bezier(.3, 1.45, .5, 1); }
+@keyframes chip-spike { 0% { translate: 0 0; scale: 1; rotate: 0deg; } 22% { translate: 0 -16px; scale: 1.5; rotate: -12deg; filter: brightness(1.9); } 52% { translate: 0 -6px; scale: 1.28; rotate: 9deg; } 100% { translate: 0 0; scale: 1; rotate: 0deg; filter: brightness(1); } }
+.chip.slump { animation: chip-slump .85s ease-out; }
+@keyframes chip-slump { 0% { translate: 0 0; filter: none; } 40% { translate: 0 4px; scale: .92; filter: saturate(.35) brightness(.6); } 100% { translate: 0 0; scale: 1; filter: none; } }
+@media (prefers-reduced-motion: reduce) { .chip.celebrate, .chip.squash, .chip.spike, .chip.slump { animation: none; } }
 
 /* NBA-Jam SLAM callout (over the field) */
 .callout {
@@ -364,6 +368,7 @@ html, body {
 .callout.td { color: #f8b800; }
 .callout.int, .callout.sack { color: #ff5a3c; }
 .callout.dime, .callout.first { color: #46ff7a; }
+.callout.bigplay { color: #ffd23c; }
 .callout.slam { animation: tf-slam 1.05s ease-out forwards; }
 @keyframes tf-slam {
   0%   { opacity: 0; transform: scale(2.4); }
