@@ -142,153 +142,170 @@
     return _bus;
   }
 
-  // ---- ZzFX param sets per event ------------------------------------------
-  // Values are EITHER a flat 20-num array (single voice, played as-is) OR an
-  // array-of-arrays (layered: every inner array is one summed voice). The
-  // heavy multi-stage reward/impact events are tagged ['@fn', key] and dispatch
-  // to a dedicated function (defined below) — so game.js's sfx('td') etc. keep
-  // working with no call-site change.
+  // ---- 16-bit synth voice: FM + detuned unison + filter-env + reverb send ----
+  //   The Sega/SNES/arcade move ZzFX (an 8-bit micro-synth) can't make: an FM
+  //   carrier for a brassy/metallic body, detuned unison for width, a lowpass
+  //   filter envelope for movement, optional waveshaper grit, and a convolver
+  //   reverb send for space. All on the ZzFX AudioContext (zzfxX); never throws;
+  //   muted-safe. This is what moves the kit from 1980s 8-bit to 1990s 16-bit.
+
+  var _verbIn = null;
+  function reverbIn() {                       // shared procedural-IR convolver send
+    if (_verbIn) return _verbIn;
+    try {
+      var c = zzfxX, sr = c.sampleRate, len = (sr * 0.8) | 0;
+      var ir = c.createBuffer(2, len, sr);
+      for (var ch = 0; ch < 2; ch++) {
+        var dd = ir.getChannelData(ch);
+        for (var i = 0; i < len; i++) dd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+      }
+      var conv = c.createConvolver(); conv.buffer = ir;
+      var wet = c.createGain(); wet.gain.value = 0.85;
+      _verbIn = c.createGain();
+      _verbIn.connect(conv); conv.connect(wet); wet.connect(busIn());
+    } catch (e) { _verbIn = busIn(); }
+    return _verbIn;
+  }
+
+  var _dcache = {};
+  function distCurve(amt) {                    // soft-clip waveshaper (arcade grit)
+    if (_dcache[amt]) return _dcache[amt];
+    var n = 1024, curve = new Float32Array(n), k = amt * 60;
+    for (var i = 0; i < n; i++) { var x = i * 2 / n - 1; curve[i] = (1 + k) * x / (1 + k * Math.abs(x)); }
+    return _dcache[amt] = curve;
+  }
+
+  // synth(o): one FM/subtractive note. o = { f, dur, vol, type, a,d,s,r (ADSR),
+  //   uni:[cents…] (unison voices), slideTo,slideDur (pitch sweep),
+  //   fm:{ratio,index,decay,type}, filt:{f0,f1,q}, dist:0..1, send:0..1 }
+  function synth(o) {
+    if (muted || typeof zzfxX === 'undefined') return;
+    ensureUnlock();
+    try {
+      var c = zzfxX, t = c.currentTime, f = o.f, dur = o.dur || 0.25,
+          vol = o.vol == null ? 0.3 : o.vol,
+          a = o.a || 0.005, d = o.d || 0.05, s = o.s == null ? 0.6 : o.s, r = o.r || 0.12,
+          end = t + a + d + dur, stop = end + r + 0.05;
+      var amp = c.createGain();
+      amp.gain.setValueAtTime(0.0001, t);
+      amp.gain.exponentialRampToValueAtTime(vol, t + a);
+      amp.gain.exponentialRampToValueAtTime(Math.max(0.0001, vol * s), t + a + d);
+      amp.gain.setValueAtTime(Math.max(0.0001, vol * s), end);
+      amp.gain.exponentialRampToValueAtTime(0.0001, end + r);
+
+      var node = amp;
+      if (o.filt) {
+        var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = o.filt.q || 2;
+        lp.frequency.setValueAtTime(o.filt.f0, t);
+        lp.frequency.exponentialRampToValueAtTime(Math.max(40, o.filt.f1), t + a + d + dur * 0.6);
+        amp.connect(lp); node = lp;
+      }
+      if (o.dist) { var ws = c.createWaveShaper(); ws.curve = distCurve(o.dist); ws.oversample = '2x'; node.connect(ws); node = ws; }
+      node.connect(busIn());
+      if (o.send) { var sg = c.createGain(); sg.gain.value = o.send; node.connect(sg); sg.connect(reverbIn()); }
+
+      var uni = o.uni || [0], carriers = [];
+      uni.forEach(function (cents) {
+        var osc = c.createOscillator(); osc.type = o.type || 'sawtooth';
+        osc.frequency.setValueAtTime(f, t);
+        if (o.slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.slideTo), t + (o.slideDur || dur));
+        osc.detune.value = cents;
+        osc.connect(amp); osc.start(t); osc.stop(stop); carriers.push(osc);
+      });
+      if (o.fm) {
+        var mod = c.createOscillator(); mod.type = o.fm.type || 'sine';
+        mod.frequency.setValueAtTime(f * (o.fm.ratio || 1), t);
+        if (o.slideTo) mod.frequency.exponentialRampToValueAtTime(Math.max(20, o.slideTo * (o.fm.ratio || 1)), t + (o.slideDur || dur));
+        var mg = c.createGain(), idx0 = f * (o.fm.index || 2);
+        mg.gain.setValueAtTime(idx0, t);
+        mg.gain.exponentialRampToValueAtTime(Math.max(1, idx0 * (o.fm.decay == null ? 0.25 : o.fm.decay)), t + a + d + dur * 0.7);
+        mod.connect(mg); carriers.forEach(function (osc) { mg.connect(osc.frequency); });
+        mod.start(t); mod.stop(stop);
+      }
+    } catch (e) {}
+  }
+  function chord(freqs, o) { freqs.forEach(function (f) { var q = {}; for (var k in o) q[k] = o[k]; q.f = f; synth(q); }); }
+  function arp(steps, o) { steps.forEach(function (st, i) { setTimeout(function () { var q = {}; for (var k in o) q[k] = o[k]; q.f = st[1]; synth(q); }, st[0]); }); }
+
+  // ---- per-event voices: every event dispatches ['@fn', key] to an FX[] voice
+  //   built on synth()/chord()/noiseHit()/thump(); crowd stays a flat fallback. --
   var SFX = {
-    // UI tick: thin pointy-square body + featherweight high-noise click edge.
-    // rand .08 so rapid taps detune slightly. No sub. ~45ms. NOT a reward.
-    ui: [
-      [.7,  .08, 1250, 0, .01, .02, 1, 2, , , , , , , , , , .6, .01],
-      [.25, .12, 2600, 0, .004, .02, 4, 1, , , , , , 1.2, , , , .3, .01]
-    ],
-
-    // snap PAP: leather-pop noise tick + low triangle body w/ down-slide.
-    // rand .10–.12 (anti-machine-gun) + a tiny raw sub via the dispatch fn.
-    snap: ['@fn', 'snap'],
-
-    // open: lowest reward rung — single thin/bright square with an UP pitchJump
-    // (+220Hz ~perfect-4th leap) = "a window opened". rand low-ish (quasi-melodic).
-    open: [.55, .05, 660, 0, .02, .05, 1, 1.8, , , 220, .04, , , , , , .6, .02],
-
-    // throw: tonal zip body (saw, fast accel slide, small delay fattens it) +
-    // a swept-bandpass noise air-tail (whip) added by the dispatch fn.
-    throw: ['@fn', 'throw'],
-
-    // catch GRAB: keep the upward pitchJump pop (fatter duty), rand .09, +a
-    // tiny high-noise contact tick. 2-band, no sub, <120ms.
-    catch: [
-      [1.0, .09, 520, .008, .03, .06, 1, 1.8, , , 150, .04, , , , , , .8, .02],
-      [.45, .15, 1200, 0, .004, .04, 4, 1, , , , , , 1, , , , .3, .03]
-    ],
-
-    // first / sack / int / td / win / loss => dedicated multi-stage functions.
-    first: ['@fn', 'first'],
-    sack:  ['@fn', 'sack'],
-    int:   ['@fn', 'int'],
-    td:    ['@fn', 'td'],
-    win:   ['@fn', 'win'],
-    loss:  ['@fn', 'loss'],
-
-    // hurry: tense gritty saw that SINKS (neg slide) + repeatTime flutter =
-    // anxious wobble. Lighter than sack (no sub). rand .10 so back-to-backs vary.
-    hurry: [.7, .10, 160, .02, .05, .13, 2, .8, -6, , , , .07, 1, , .3, .1, .55, .04],
-
-    // pbu CLAP: bright noise slap w/ FM modulation (metallic "ting" of contact)
-    // + a low-mid saw knock w/ quick down-slide (the bat-away force). <130ms.
-    pbu: [
-      [1.1, .12, 650, 0, .01, .07, 4, 1, , , , , , 2, 12, .3, , .4, .03],
-      [.7,  .10, 300, .005, .02, .06, 2, 1, -10, , , , , .4, , , , .4, .03]
-    ],
-
-    // whistle TWEET: keep the tremolo sine warble (pea rattle) + a faint
-    // high-noise "air/breath" bed so it reads as blown metal, not a sine.
-    whistle: [
-      [.9,  .06, 2100, .015, .16, .04, 0, .5, , , , , , , , , , .7, , .6],
-      [.22, .10, 3200, .01, .12, .04, 4, 1, , , , , , 1, , .4, , .45, .02]
-    ],
-
-    // crowd: handled by crowd(); kept as a fallback single-voice for sfx('crowd').
-    crowd: [.7, .2, 500, .6, .9, .6, 4, .5, , , , , , 2, , , .3, .5, .4, .3]
+    ui:      ['@fn', 'ui'],       // crisp FM tick — incidental
+    snap:    ['@fn', 'snap'],     // leather PAP: FM thock + noise pop + sub
+    open:    ['@fn', 'open'],     // window opens: bright FM ping up + reverb
+    throw:   ['@fn', 'throw'],    // FM zip up + airy whip
+    catch:   ['@fn', 'catch'],    // FM grab pop + contact tick + reverb
+    first:   ['@fn', 'first'],    // fat 2-note FM arpeggio + reverb
+    sack:    ['@fn', 'sack'],     // noise crack + distorted FM brass blat + sub
+    int:     ['@fn', 'int'],      // pick crash + gut sub, then a runback arp
+    td:      ['@fn', 'td'],       // big FM brass chord stab + sub boom + sparkle
+    win:     ['@fn', 'win'],      // grand ascending FM fanfare + triad, long verb
+    loss:    ['@fn', 'loss'],     // deflating descending minor FM "wah"
+    hurry:   ['@fn', 'hurry'],    // anxious detuned FM wobble that sinks
+    pbu:     ['@fn', 'pbu'],      // metallic FM clang + low knock
+    whistle: ['@fn', 'whistle'],  // blown-metal FM tweet + air
+    crowd:   [.7, .2, 500, .6, .9, .6, 4, .5, , , , , , 2, , , .3, .5, .4, .3]  // fallback; crowd() is the real one
   };
 
-  // ---- dedicated multi-stage voices (rewards + impacts) -------------------
-  // Each is SFX-only synth; game.js separately choreographs crowd()/announce().
-
   var FX = {
-    // snap PAP: noise leather-pop + low body thump + tiny raw sub.
+    ui: function () {
+      synth({ f: 1200, type: 'square', fm: { ratio: 3, index: 0.6, decay: 0.1 }, a: .001, d: .012, s: .08, r: .015, dur: .008, vol: .18 });
+    },
     snap: function () {
-      layer(
-        [.7,  .12, 1700, 0, .005, .03, 4, 1, , , , , , 2, , .15, , .3, .02],   // A pop
-        [1.3, .10, 95,  .005, .02, .07, 1, 1.4, -4, , , , , 1, , , , .4, .04]  // B thud
-      );
-      thump(120, 70, 0.04, 0.30);                                             // C sub
+      synth({ f: 150, type: 'square', fm: { ratio: 1.5, index: 3, decay: 0.05 }, slideTo: 90, slideDur: 0.05, a: .002, d: .03, s: .2, r: .04, dur: .03, vol: .34, filt: { f0: 2200, f1: 400, q: 1 } });
+      noiseHit(1900, 1.0, 'bandpass', 0.04, 0.40);
+      thump(120, 70, 0.05, 0.34);
     },
-
-    // throw: tonal zip + airy swept whip.
+    open: function () {
+      synth({ f: 660, type: 'triangle', fm: { ratio: 3, index: 1.2, decay: 0.3 }, slideTo: 880, slideDur: 0.05, a: .003, d: .04, s: .3, r: .12, dur: .05, vol: .24, send: .25 });
+    },
     throw: function () {
-      layer([.9, .06, 360, .01, .03, .09, 2, 1.6, -6, 40, , , , , , , .05, .6, .02]);
-      noiseHit(1400, 1.2, 'bandpass', 0.10, 0.25, [1800, 700]);               // air whip
+      synth({ f: 300, type: 'sawtooth', fm: { ratio: 2, index: 2, decay: 0.4 }, slideTo: 720, slideDur: 0.1, a: .005, d: .05, s: .3, r: .06, dur: .08, vol: .26, filt: { f0: 1200, f1: 4000, q: 2 }, send: .12 });
+      noiseHit(1400, 1.2, 'bandpass', 0.10, 0.22, [1800, 700]);
     },
-
-    // first: Mario-coin 2-note ascending square 4th (G5->C6), top rings longer.
+    catch: function () {
+      synth({ f: 480, type: 'triangle', fm: { ratio: 2, index: 1.8, decay: 0.25 }, slideTo: 640, slideDur: 0.04, a: .003, d: .05, s: .35, r: .1, dur: .07, vol: .3, send: .18 });
+      noiseHit(2800, 1.0, 'highpass', 0.02, 0.16);
+    },
     first: function () {
-      seq([
-        [0,  [.5,  .03, 784,  .01, .03, .07, 2, 1.4, , , , , , , , , , .7,  .03]],
-        [60, [.55, .03, 1047, .01, .06, .12, 2, 1.4, , , , , , , , , , .85, .04]]
-      ]);
+      synth({ f: 784, type: 'sawtooth', uni: [-7, 7], fm: { ratio: 1, index: 2, decay: 0.3 }, a: .004, d: .05, s: .5, r: .1, dur: .08, vol: .26, filt: { f0: 4000, f1: 2000, q: 2 }, send: .25 });
+      setTimeout(function () { synth({ f: 1047, type: 'sawtooth', uni: [-7, 7], fm: { ratio: 1, index: 2.4, decay: 0.3 }, a: .004, d: .07, s: .6, r: .18, dur: .16, vol: .28, filt: { f0: 5000, f1: 2200, q: 2 }, send: .35 }); }, 75);
     },
-
-    // sack: NFL-Blitz bone-crunch — noise crack + low saw down-whomp + sub thump.
     sack: function () {
-      layer(
-        [1.5, .15, 420, 0, .006, .06, 4, 1, , , , , , 2, , .4, , .4, .04],     // A crack
-        [1.3, .10, 180, .01, .04, .16, 2, .7, -8, -25, , , , 1, , .15, , .4, .08] // B body
-      );
-      thump(150, 45, 0.07, 0.55);                                             // C felt sub
+      noiseHit(850, 1.6, 'bandpass', 0.07, 0.50);
+      synth({ f: 170, type: 'sawtooth', fm: { ratio: 1.4, index: 4.5, decay: 0.12 }, slideTo: 65, slideDur: 0.16, a: .002, d: .04, s: .25, r: .1, dur: .1, vol: .4, filt: { f0: 1800, f1: 180, q: 4 }, dist: .45, send: .12 });
+      thump(150, 40, 0.18, 0.6);
     },
-
-    // int: two-stage momentum FLIP. Stage1 = pick + crash (down-snap + crack +
-    // sub). Stage2 = short ascending runback arp.
     int: function () {
-      layer(
-        [1.4, .06, 440,  .02, .06, .20, 2, 1.1, , , -180, .10, , 1, , .1, , .7, .06], // down-snap
-        [1.0, .12, 3000, 0, .006, .05, 4, 1, , , , , , 2, , .3, , .4, .04]            // crack
-      );
-      thump(180, 50, 0.16, 0.50);                                             // gut-drop
-      seq([
-        [140, [.5,  .04, 659, .01, .05, .10, 1, 1.4, , , 150, .05, , , , , , .75, .03]],
-        [200, [.55, .04, 880, .01, .06, .13, 1, 1.4, , , 200, .06, , , , , , .85, .04]]
-      ]);
+      synth({ f: 440, type: 'sawtooth', fm: { ratio: 1.5, index: 3, decay: 0.2 }, slideTo: 120, slideDur: 0.18, a: .004, d: .06, s: .3, r: .12, dur: .12, vol: .34, filt: { f0: 2400, f1: 300, q: 3 }, dist: .3, send: .15 });
+      noiseHit(3000, 1.0, 'highpass', 0.05, 0.28);
+      thump(180, 50, 0.16, 0.5);
+      arp([[170, 659], [240, 880], [310, 1175]], { type: 'sawtooth', uni: [-6, 6], fm: { ratio: 1, index: 2, decay: 0.3 }, a: .004, d: .05, s: .5, r: .12, dur: .08, vol: .24, send: .3 });
     },
-
-    // td: big SCORE slam — ascending major run (C-E-G-C, FM shimmer) w/ a long
-    // ringing top, UNDER a sub boom + a bright sparkle on the final note.
     td: function () {
-      seq([
-        [0,   [.5, .03, 523,  .02, .07, .12, 1, 1.4, , , , , , , 12]],
-        [70,  [.5, .03, 659,  .02, .07, .12, 1, 1.4, , , , , , , 12]],
-        [140, [.5, .03, 784,  .02, .07, .12, 1, 1.4, , , , , , , 12]],
-        [210, [.6, .03, 1047, .02, .22, .30, 1, 1.4, , , , , , , 20, , , .9, .10, .3]]
-      ]);
-      thump(110, 80, 0.45, 0.40);                                            // sub boom
-      setTimeout(function () { noiseHit(6000, 0.7, 'highpass', 0.15, 0.20); }, 210); // sparkle
+      chord([523, 659, 784, 1047], { type: 'sawtooth', uni: [-10, 10], fm: { ratio: 1, index: 2.8, decay: 0.35 }, a: .006, d: .1, s: .8, r: .4, dur: .35, vol: .2, filt: { f0: 5000, f1: 2000, q: 2 }, send: .4 });
+      thump(110, 82, 0.5, 0.45);
+      setTimeout(function () { noiseHit(7000, 0.7, 'highpass', 0.18, 0.16); }, 60);
     },
-
-    // win: grander, more resolved than td — 5-note triad+octave climb ending on
-    // a sustained detuned-shimmer top (octave-doubled), over a long victory sub.
     win: function () {
-      seq([
-        [0,   [.5, .03, 523,  .02, .08, .12, 1, 1.4, , , , , , , 12]],   // C
-        [70,  [.5, .03, 659,  .02, .08, .12, 1, 1.4, , , , , , , 12]],   // E
-        [140, [.5, .03, 784,  .02, .08, .12, 1, 1.4, , , , , , , 12]],   // G
-        [210, [.5, .03, 1047, .02, .08, .12, 1, 1.4, , , , , , , 16]],   // C (oct)
-        [290, [.6, .04, 1319, .02, .30, .50, 1, 1.4, , , , , , , 24, , .2,  .95, .12, .35]], // ring
-        [290, [.3, .04, 2637, .02, .28, .45, 1, 1.4, , , , , , , 24, , ,    .9,  .10, .35]]  // oct double
-      ]);
-      thump(98, 98, 0.70, 0.40);                                             // sustained sub
+      arp([[0, 523], [90, 659], [180, 784], [270, 1047]], { type: 'sawtooth', uni: [-9, 9], fm: { ratio: 1, index: 2.5, decay: 0.3 }, a: .005, d: .06, s: .7, r: .14, dur: .12, vol: .26, filt: { f0: 4500, f1: 2000, q: 3 }, send: .3 });
+      setTimeout(function () { chord([1319, 1047, 659], { type: 'sawtooth', uni: [-10, 10], fm: { ratio: 1, index: 3, decay: 0.4 }, a: .006, d: .1, s: .9, r: .6, dur: .5, vol: .2, filt: { f0: 6000, f1: 2600, q: 2 }, send: .5 }); }, 380);
+      thump(98, 98, 0.8, 0.4);
     },
-
-    // loss: deflating descending minor "wah-wah" — soft saw, sags via neg slide,
-    // longer sad tail. No noise/sub (must not feel powerful).
     loss: function () {
-      seq([
-        [0,   [1.0, .04, 392, .03, .10, .18, 2, 1, -4, , , , , , , , , .6,  .06]],
-        [160, [1.1, .04, 311, .03, .16, .30, 2, 1, -6, , , , , , , , , .55, .10]]
-      ]);
+      synth({ f: 392, type: 'sawtooth', fm: { ratio: 1, index: 1.5, decay: 0.5 }, slideTo: 330, slideDur: 0.2, a: .01, d: .1, s: .5, r: .2, dur: .2, vol: .3, filt: { f0: 1600, f1: 500, q: 2 }, send: .3 });
+      setTimeout(function () { synth({ f: 311, type: 'sawtooth', fm: { ratio: 1, index: 1.5, decay: 0.5 }, slideTo: 247, slideDur: 0.3, a: .01, d: .14, s: .45, r: .3, dur: .3, vol: .3, filt: { f0: 1300, f1: 380, q: 2 }, send: .35 }); }, 175);
+    },
+    hurry: function () {
+      synth({ f: 200, type: 'square', uni: [-14, 14], fm: { ratio: 1.01, index: 2, decay: 0.6 }, slideTo: 150, slideDur: 0.15, a: .005, d: .05, s: .5, r: .08, dur: .12, vol: .28, filt: { f0: 1400, f1: 600, q: 5 } });
+    },
+    pbu: function () {
+      synth({ f: 520, type: 'square', fm: { ratio: 5.4, index: 3, decay: 0.1 }, a: .002, d: .04, s: .15, r: .06, dur: .05, vol: .3, send: .2 });
+      synth({ f: 300, type: 'sawtooth', fm: { ratio: 1.5, index: 2, decay: 0.1 }, slideTo: 180, slideDur: 0.06, a: .002, d: .03, s: .2, r: .05, dur: .05, vol: .26, dist: .2 });
+    },
+    whistle: function () {
+      synth({ f: 2100, type: 'sine', fm: { ratio: 1.005, index: 0.5, decay: 0.8 }, a: .02, d: .05, s: .8, r: .05, dur: .18, vol: .26, send: .15 });
+      noiseHit(3400, 1.5, 'bandpass', 0.18, 0.06);
     }
   };
 
@@ -406,35 +423,24 @@
     try { zzfx(vol, .05, freq, atk, sus, rel, shape, 1.6, 0, 0, 0, 0, 0, 0, 0, 0, 0, .6, .02); } catch (e) {}
   }
 
-  // fanfare: tighter/brighter square climb (~60ms steps) + a detuned shimmer
-  // ring on the held top w/ a quiet octave-up double. (Essentially the td run.)
+  // fanfare: the melodic ascending FM brass run (C-E-G-C) layered over the FX.td
+  // chord stab on a score — detuned unison + filter env + reverb = a 16-bit call.
   function fanfare() {
-    seq([
-      [0,   [.45, .03, 523,  .01, .06, .10, 2, 1.4]],
-      [60,  [.45, .03, 659,  .01, .06, .10, 2, 1.4]],
-      [120, [.45, .03, 784,  .01, .06, .10, 2, 1.4]],
-      [180, [.5,  .03, 1047, .01, .20, .36, 2, 1.4, , , , , , , 18, , .12, .9, .10, .3]],
-      [180, [.25, .03, 2094, .01, .18, .30, 2, 1.4, , , , , , , 18]]   // octave shimmer
-    ]);
+    arp([[0, 523], [90, 659], [180, 784]], { type: 'sawtooth', uni: [-8, 8], fm: { ratio: 1, index: 2.2, decay: 0.3 }, a: .005, d: .05, s: .65, r: .14, dur: .12, vol: .22, filt: { f0: 4200, f1: 1800, q: 3 }, send: .3 });
+    setTimeout(function () { synth({ f: 1047, type: 'sawtooth', uni: [-11, 0, 11], fm: { ratio: 1, index: 2.8, decay: 0.35 }, a: .005, d: .08, s: .85, r: .45, dur: .32, vol: .24, filt: { f0: 5200, f1: 2200, q: 2 }, send: .5 }); }, 270);
   }
 
-  // whoosh: bigger airy riser — rising saw lead + triangle octave-down body for
-  // soft lift + a rising bandpass-noise air bed. Upward = positive/lift.
+  // whoosh: an FM riser for a big gainer — saw+FM sweeping up through an opening
+  // lowpass + a rising bandpass-noise air bed. Upward = lift.
   function whoosh() {
-    layer(
-      [.5, .05, 170, .02, .26, .3, 1, 1.2, 13, 7, , , .1, , , , , .5, .1],   // A lead
-      [.4, .05, 85,  .02, .26, .3, 1, 1.4, 6,  4, , , , , , , , .5, .1]      // B body
-    );
-    noiseHit(900, 1.0, 'bandpass', 0.30, 0.18, [400, 1800]);                 // rising air
+    synth({ f: 180, type: 'sawtooth', uni: [-6, 6], fm: { ratio: 1.5, index: 1.5, decay: 1.5 }, slideTo: 760, slideDur: 0.34, a: .02, d: .1, s: .7, r: .12, dur: .26, vol: .26, filt: { f0: 500, f1: 4500, q: 2 }, send: .2 });
+    noiseHit(900, 1.0, 'bandpass', 0.32, 0.16, [400, 1900]);
   }
 
-  // ding: brighter coin-style 2-note up-bling — square (not triangle), top
-  // note rings a touch longer. Reusable micro-reward building block.
+  // ding: a bright FM coin 2-note up-bling (micro-reward building block).
   function ding() {
-    seq([
-      [0,  [.4,  .04, 880,  .01, .04, .08, 2, 1.6, , , , , , , , , , .8, .02]],
-      [70, [.45, .04, 1320, .01, .06, .13, 2, 1.6, , , , , , , , , , .9, .04]]
-    ]);
+    synth({ f: 880, type: 'square', fm: { ratio: 2, index: 1, decay: 0.3 }, a: .003, d: .04, s: .3, r: .08, dur: .04, vol: .24, send: .2 });
+    setTimeout(function () { synth({ f: 1320, type: 'square', fm: { ratio: 2, index: 1.2, decay: 0.3 }, a: .003, d: .05, s: .4, r: .12, dur: .1, vol: .26, send: .3 }); }, 75);
   }
 
   // ---- speechSynthesis announcer (the big beats only — NBA-Jam restraint) ----
