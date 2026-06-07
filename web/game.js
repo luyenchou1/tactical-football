@@ -877,7 +877,7 @@
     const readFrame = function (t) { return function () { placeReadTick(rpPre, t); ballEl.style.opacity = '1'; placeBall(26.6, -3); }; };
     const tickFrame = function (t) { return function () { placeTick(rpSc, t); }; };
     rpFrames = [
-      { render: readFrame(0), cap: 'Snap', key: 'read' },
+      { render: function () { resetFormation(); ballEl.style.opacity = '1'; placeBall(26.6, -3); }, cap: 'Snap', key: 'read' },   // the actual declared snap alignment (press/off + leverage), not the route-trail
       { render: readFrame(1), cap: 'Routes develop', key: 'separation' },
       { render: readFrame(2), cap: 'Routes develop', key: 'separation' },
       { render: readFrame(3), cap: 'The read — who’s open?', key: 'separation' },
