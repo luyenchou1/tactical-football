@@ -963,6 +963,7 @@
 
     const o = result.outcome;
     if (window.Sound && o !== 'interception' && driveResult !== 'td') setTimeout(function () { sfx('whistle'); }, 160);  // ref whistles the play dead
+    if (window.Sound) Sound.crowdLevel(o === 'completion' ? 'swell' : 'low');   // the crowd reacts to a catch, settles otherwise
     let cls = 'neutral', txt = '';
     if (o === 'completion') { cls = 'good'; txt = 'Completion +' + result.yards; }
     else if (o === 'interception') { cls = 'bad'; txt = 'INTERCEPTED'; }
@@ -1061,7 +1062,10 @@
   function setStage(name) {
     if (name !== 'postplay') rpTeardown();
     Object.keys(panel).forEach(function (k) { panel[k].classList.toggle('hidden', k !== name); });
-    if (window.Sound) { if (name === 'gameover') Sound.crowdBedStop(); else Sound.crowdBedStart(); }   // the recorded crowd bed runs through the game
+    if (window.Sound) {
+      if (name === 'gameover') Sound.crowdBedStop();
+      else { Sound.crowdBedStart(); if (name === 'reading' || name === 'animating') Sound.crowdLevel('play'); else if (name !== 'postplay') Sound.crowdLevel('low'); }   // crowd recedes for the read, swells for the play
+    }
   }
 
   // ---------- new drive / new play ----------

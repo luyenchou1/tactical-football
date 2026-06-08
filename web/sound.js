@@ -595,8 +595,9 @@
         vol: v, a: 0.12, d: 0.2, s: 0.7, r: 0.4, noiseMix: 0.55, send: 0.25, jitter: 0.08 });   // noise-heavy = breath, not organ
     });
   }
-  function crowdGasp() {                             // louder shocked collective gasp on an interception
+  function crowdGasp() {                             // the crowd's groan on an interception
     if (muted || typeof zzfxX === 'undefined') return;
+    if (playSample('ohh', 1, 4)) return;             // the recorded crowd 'ohhh' at full volume — a turnover hurts
     noiseHit(1200, 0.8, 'bandpass', 0.18, 0.12, [600, 1800]);    // the collective inhale
     [110, 131, 165, 123, 98, 147, 175].forEach(function (p) {    // open /a/, fast attack = everyone at once
       formant({ vowel: 'ah', f0: p * rnd(0.85, 1.15), slideTo: p * 0.9, dur: 1.25 * rnd(0.9, 1.1),
@@ -667,7 +668,7 @@
   //   Two real crowd recordings looped + layered (offset so they don't phase-align)
   //   for a continuous stadium hum — decoded with the other clips. Starts once the
   //   clips have loaded (idempotent, retried each setStage); stops on gameover/mute.
-  var AMBIENT_LEVEL = 0.5;            // overall crowd-bed loudness — the tuning knob
+  var CROWD_LOW = 0.15, CROWD_PLAY = 0.5, CROWD_SWELL = 0.72;   // resting / during-play / completion-swell (tune here)
   var _crowdBed = null;
   function crowdBedStart() {
     if (muted || typeof zzfxX === 'undefined' || _crowdBed) return;
@@ -677,7 +678,7 @@
     try {
       var c = zzfxX, t = c.currentTime;
       var g = c.createGain(); g.gain.value = 0.0001; g.connect(busIn());
-      g.gain.linearRampToValueAtTime(AMBIENT_LEVEL, t + 1.2);           // fade in, no click
+      g.gain.linearRampToValueAtTime(CROWD_LOW, t + 1.2);              // fade in to the resting level
       var per = bufs.length > 1 ? 0.7 : 1.0;                            // don't double up when layering
       var nodes = bufs.map(function (buf, i) {
         var src = c.createBufferSource(); src.buffer = buf; src.loop = true;
@@ -700,6 +701,18 @@
     } catch (e) {}
     _crowdBed = null;
   }
+  // crowdLevel(kind): ramp the bed for the game phase — 'low' while you pick a play,
+  // 'play' while the play runs, 'swell' = a reaction pop then settle on a completion.
+  function crowdLevel(kind) {
+    if (!_crowdBed || typeof zzfxX === 'undefined') return;
+    try {
+      var g = _crowdBed.g.gain, t = zzfxX.currentTime;
+      g.cancelScheduledValues(t); g.setValueAtTime(Math.max(0.0001, g.value), t);
+      if (kind === 'play') g.linearRampToValueAtTime(CROWD_PLAY, t + 0.4);                                              // the play is live — crowd up
+      else if (kind === 'swell') { g.linearRampToValueAtTime(CROWD_SWELL, t + 0.2); g.linearRampToValueAtTime(CROWD_LOW, t + 1.8); }  // a pop on a catch, then settle
+      else g.linearRampToValueAtTime(CROWD_LOW, t + 0.9);                                                               // selection / between plays
+    } catch (e) {}
+  }
 
-  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, crowdBedStart: crowdBedStart, crowdBedStop: crowdBedStop };
+  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, crowdBedStart: crowdBedStart, crowdBedStop: crowdBedStop, crowdLevel: crowdLevel };
 })(window);
