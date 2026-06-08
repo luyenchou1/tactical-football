@@ -149,7 +149,7 @@
   //   muted-safe. If a clip isn't loaded yet (or is missing) playSample() returns
   //   false and the caller's procedural version plays — so nothing ever goes silent.
   var SAMPLE_URLS = {
-    ambient: ['sfx/crowd1.mp3', 'sfx/crowd2.mp3'],   // looped under the game
+    ambient: ['sfx/crowd3.mp3'],                     // one long crowd-murmur loop (no recognizable chants)
     snap:    ['sfx/snap.mp3'],
     whistle: ['sfx/whistle.mp3'],
     cheer:   ['sfx/cheer.mp3'],
@@ -684,7 +684,7 @@
         var src = c.createBufferSource(); src.buffer = buf; src.loop = true;
         var sg = c.createGain(); sg.gain.value = per;
         src.connect(sg); sg.connect(g);
-        src.start(t + i * 0.17);                                        // tiny offset = less obvious loop
+        src.start(t + i * 0.17, buf.duration > 2 ? Math.random() * (buf.duration - 1) : 0);   // begin mid-clip = a different section each game
         return src;
       });
       _crowdBed = { g: g, nodes: nodes };
