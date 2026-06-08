@@ -1064,7 +1064,12 @@
     Object.keys(panel).forEach(function (k) { panel[k].classList.toggle('hidden', k !== name); });
     if (window.Sound) {
       if (name === 'gameover') Sound.crowdBedStop();
-      else { Sound.crowdBedStart(); if (name === 'reading' || name === 'animating') Sound.crowdLevel('play'); else if (name !== 'postplay') Sound.crowdLevel('low'); }   // crowd recedes for the read, swells for the play
+      else {
+        Sound.crowdBedStart();
+        if (name === 'reading' || name === 'animating') Sound.crowdLevel('play');
+        else if (name !== 'postplay') Sound.crowdLevel('low');
+        if (name === 'presnap' && Math.random() < 0.18) Sound.band();   // the band strikes up, sporadically, during selection
+      }
     }
   }
 

@@ -150,6 +150,7 @@
   //   false and the caller's procedural version plays — so nothing ever goes silent.
   var SAMPLE_URLS = {
     ambient: ['sfx/crowd3.mp3'],                     // one long crowd-murmur loop (no recognizable chants)
+    band:    ['sfx/band1.mp3'],                       // stadium band, played sporadically
     snap:    ['sfx/snap.mp3'],
     whistle: ['sfx/whistle.mp3'],
     cheer:   ['sfx/cheer.mp3'],
@@ -691,6 +692,7 @@
     } catch (e) {}
   }
   function crowdBedStop() {
+    if (_band) { try { _band.stop(); } catch (e) {} _band = null; }   // stop the band too (mute / gameover)
     if (!_crowdBed) return;
     try {
       var c = zzfxX, t = c.currentTime, b = _crowdBed;
@@ -714,5 +716,30 @@
     } catch (e) {}
   }
 
-  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, crowdBedStart: crowdBedStart, crowdBedStop: crowdBedStop, crowdLevel: crowdLevel };
+  // ---------- stadium band (an occasional ~11s chunk during the downtime) ----------
+  //   A real band clip played sporadically (a random chance each selection) from a
+  //   random section, faded in/out, at a background level. One at a time.
+  var BAND_LEVEL = 0.33;             // the band-in-the-stands loudness — tune here
+  var _band = null;
+  function band() {
+    if (muted || typeof zzfxX === 'undefined' || _band) return;   // one at a time
+    var bufs = (SAMPLES.band || []).filter(Boolean);
+    if (!bufs.length) return;
+    ensureUnlock();
+    try {
+      var c = zzfxX, t = c.currentTime, buf = bufs[0];
+      var off = buf.duration > 14 ? Math.random() * (buf.duration - 12) : 0;     // a different section each time
+      var playFor = Math.min(buf.duration - off, 11);                            // ~11s chunk
+      var src = c.createBufferSource(); src.buffer = buf;
+      var g = c.createGain(); g.gain.value = 0.0001;
+      src.connect(g); g.connect(busIn());
+      g.gain.linearRampToValueAtTime(BAND_LEVEL, t + 1.5);                        // fade in
+      g.gain.setValueAtTime(BAND_LEVEL, t + Math.max(1.5, playFor - 1.5));
+      g.gain.linearRampToValueAtTime(0.0001, t + playFor);                        // fade out
+      src.start(t, off); src.stop(t + playFor + 0.1);
+      _band = src; src.onended = function () { _band = null; };
+    } catch (e) {}
+  }
+
+  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, crowdBedStart: crowdBedStart, crowdBedStop: crowdBedStop, crowdLevel: crowdLevel, band: band };
 })(window);
