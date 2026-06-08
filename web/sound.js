@@ -662,70 +662,14 @@
     if (!document.hidden && unlocked) { try { if (zzfxX.state !== 'running') zzfxX.resume(); } catch (e) {} }
   });
 
-  // ---------- ambient crowd murmur bed ----------
-  //   A quiet, persistent distant-crowd bed on its own gain bus. duck() dips it on
-  //   the snap so the SFX cut through; unduck() swells it back between plays. Starts
-  //   ONCE and is level-driven (never reallocated per play). Stops on mute/gameover.
-  //   (A procedural music bed lived here too, but it read as ominous sci-fi — cut.)
-  var AMBIENT_VOL = 0.05, AMBIENT_DUCK = 0.014;
-  var _ambientGain = null, _murmur = null;
+  // ---------- ambient (crowd-murmur bed removed) ----------
+  //   The procedural murmur read as a continuous jet-engine drone once the music
+  //   that had masked it was cut. Gone now. These stay as no-ops so the mute path
+  //   and the setStage wiring don't break. (A real recorded crowd loop could go here.)
+  function musicStart() {}
+  function musicStop() {}
+  function duck() {}
+  function unduck() {}
 
-  function ambientGain() {                       // murmur bus (null fallback — never alias the master)
-    if (_ambientGain) return _ambientGain;
-    try { _ambientGain = zzfxX.createGain(); _ambientGain.gain.value = 0.0001; _ambientGain.connect(busIn()); }
-    catch (e) { _ambientGain = null; }
-    return _ambientGain;
-  }
-  function brownBuffer(sec) {                    // brown noise = a soft, hiss-free distant babble
-    var c = zzfxX, sr = c.sampleRate, n = Math.max(1, (sr * sec) | 0), b = c.createBuffer(1, n, sr), d = b.getChannelData(0), last = 0;
-    for (var i = 0; i < n; i++) { var w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
-    return b;
-  }
-  function murmurStart() {                       // start the persistent bed ONCE
-    if (muted || typeof zzfxX === 'undefined' || _murmur) return;
-    ensureUnlock();
-    var ag = ambientGain(); if (!ag) return;
-    try {
-      var c = zzfxX, t = c.currentTime;
-      var src = c.createBufferSource(); src.buffer = brownBuffer(3.0); src.loop = true;
-      var src2 = c.createBufferSource(); src2.buffer = src.buffer; src2.loop = true; src2.playbackRate.value = 1.004;  // detuned twin = babble
-      var bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 550; bp.Q.value = 0.6;
-      var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100; lp.Q.value = 0.7;
-      var lfoG = c.createGain(); lfoG.gain.value = 1.0;        // the LFO rides HERE, leaving ag.gain pure for duck/stop
-      src.connect(bp); src2.connect(bp); bp.connect(lp); lp.connect(lfoG); lfoG.connect(ag);
-      var rs = c.createGain(); rs.gain.value = 0.18; lp.connect(rs); rs.connect(reverbIn());   // a little room
-      ag.gain.cancelScheduledValues(t); ag.gain.setValueAtTime(Math.max(0.0001, ag.gain.value), t);
-      ag.gain.linearRampToValueAtTime(AMBIENT_VOL, t + 0.8);   // swell in (no click)
-      var lfo1 = c.createOscillator(); lfo1.type = 'sine'; lfo1.frequency.value = 0.12;        // slow level breathe
-      var l1g = c.createGain(); l1g.gain.value = 0.06; lfo1.connect(l1g); l1g.connect(lfoG.gain); lfo1.start(t);
-      var lfo2 = c.createOscillator(); lfo2.type = 'sine'; lfo2.frequency.value = 0.2;         // slow timbre drift
-      var l2g = c.createGain(); l2g.gain.value = 180; lfo2.connect(l2g); l2g.connect(bp.frequency); lfo2.start(t);
-      src.start(t); src2.start(t);
-      _murmur = { nodes: [src, src2, lfo1, lfo2] };
-    } catch (e) {}
-  }
-  function murmurStop() {
-    if (!_murmur) return;
-    try {
-      var c = zzfxX, t = c.currentTime;
-      if (_ambientGain) { _ambientGain.gain.cancelScheduledValues(t); _ambientGain.gain.setValueAtTime(Math.max(0.0001, _ambientGain.gain.value), t); _ambientGain.gain.linearRampToValueAtTime(0.0001, t + 0.3); }
-      var st = t + 0.34;
-      _murmur.nodes.forEach(function (n) { try { n.stop(st); } catch (e) {} });
-    } catch (e) {}
-    _murmur = null;
-  }
-  function duck() {                              // snap: dip the crowd so the SFX cut through
-    if (typeof zzfxX === 'undefined' || !_ambientGain || !_murmur) return;
-    try { var t = zzfxX.currentTime; _ambientGain.gain.cancelScheduledValues(t); _ambientGain.gain.setTargetAtTime(AMBIENT_DUCK, t, 0.05); } catch (e) {}
-  }
-  function unduck() {                            // between plays: swell back
-    if (typeof zzfxX === 'undefined' || !_ambientGain || !_murmur) return;
-    try { var t = zzfxX.currentTime; _ambientGain.gain.cancelScheduledValues(t); _ambientGain.gain.setTargetAtTime(AMBIENT_VOL, t, 0.5); } catch (e) {}
-  }
-  // lifecycle names kept so setStage's wiring still drives the crowd bed (start it,
-  // dip on the snap, swell back, stop at gameover) with no game.js change.
-  function musicStart() { if (muted) return; ensureUnlock(); murmurStart(); }
-  function musicStop() { murmurStop(); }
-
-  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, musicStart: musicStart, musicStop: musicStop, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, murmurStart: murmurStart, murmurStop: murmurStop, duck: duck, unduck: unduck };
+  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, musicStart: musicStart, musicStop: musicStop, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, duck: duck, unduck: unduck };
 })(window);

@@ -1061,11 +1061,6 @@
   function setStage(name) {
     if (name !== 'postplay') rpTeardown();
     Object.keys(panel).forEach(function (k) { panel[k].classList.toggle('hidden', k !== name); });
-    // menu music plays only while you're reading the defense; it ducks for the reveal
-    if (window.Sound) {
-      if (name === 'gameover') Sound.musicStop();
-      else { Sound.musicStart(); if (name === 'reading' || name === 'animating') Sound.duck(); else Sound.unduck(); }
-    }
   }
 
   // ---------- new drive / new play ----------
