@@ -149,6 +149,7 @@
   //   muted-safe. If a clip isn't loaded yet (or is missing) playSample() returns
   //   false and the caller's procedural version plays — so nothing ever goes silent.
   var SAMPLE_URLS = {
+    ambient: ['sfx/crowd1.mp3', 'sfx/crowd2.mp3'],   // looped under the game
     snap:    ['sfx/snap.mp3'],
     whistle: ['sfx/whistle.mp3'],
     cheer:   ['sfx/cheer.mp3'],
@@ -648,7 +649,7 @@
     muted = !!m;
     try { localStorage.setItem('tf-sound', muted ? 'off' : 'on'); } catch (e) {}
     if (muted && hasSpeech) { try { speechSynthesis.cancel(); } catch (e) {} }
-    if (muted) musicStop();
+    if (muted) crowdBedStop();
     return muted;
   }
   function isMuted() { return muted; }
@@ -662,14 +663,43 @@
     if (!document.hidden && unlocked) { try { if (zzfxX.state !== 'running') zzfxX.resume(); } catch (e) {} }
   });
 
-  // ---------- ambient (crowd-murmur bed removed) ----------
-  //   The procedural murmur read as a continuous jet-engine drone once the music
-  //   that had masked it was cut. Gone now. These stay as no-ops so the mute path
-  //   and the setStage wiring don't break. (A real recorded crowd loop could go here.)
-  function musicStart() {}
-  function musicStop() {}
-  function duck() {}
-  function unduck() {}
+  // ---------- ambient crowd bed (recorded crowd loops, layered) ----------
+  //   Two real crowd recordings looped + layered (offset so they don't phase-align)
+  //   for a continuous stadium hum — decoded with the other clips. Starts once the
+  //   clips have loaded (idempotent, retried each setStage); stops on gameover/mute.
+  var AMBIENT_LEVEL = 0.5;            // overall crowd-bed loudness — the tuning knob
+  var _crowdBed = null;
+  function crowdBedStart() {
+    if (muted || typeof zzfxX === 'undefined' || _crowdBed) return;
+    var bufs = (SAMPLES.ambient || []).filter(Boolean);
+    if (!bufs.length) return;         // not decoded yet -> retry on the next call
+    ensureUnlock();
+    try {
+      var c = zzfxX, t = c.currentTime;
+      var g = c.createGain(); g.gain.value = 0.0001; g.connect(busIn());
+      g.gain.linearRampToValueAtTime(AMBIENT_LEVEL, t + 1.2);           // fade in, no click
+      var per = bufs.length > 1 ? 0.7 : 1.0;                            // don't double up when layering
+      var nodes = bufs.map(function (buf, i) {
+        var src = c.createBufferSource(); src.buffer = buf; src.loop = true;
+        var sg = c.createGain(); sg.gain.value = per;
+        src.connect(sg); sg.connect(g);
+        src.start(t + i * 0.17);                                        // tiny offset = less obvious loop
+        return src;
+      });
+      _crowdBed = { g: g, nodes: nodes };
+    } catch (e) {}
+  }
+  function crowdBedStop() {
+    if (!_crowdBed) return;
+    try {
+      var c = zzfxX, t = c.currentTime, b = _crowdBed;
+      b.g.gain.cancelScheduledValues(t); b.g.gain.setValueAtTime(Math.max(0.0001, b.g.gain.value), t);
+      b.g.gain.linearRampToValueAtTime(0.0001, t + 0.4);
+      var st = t + 0.45;
+      b.nodes.forEach(function (n) { try { n.stop(st); } catch (e) {} });
+    } catch (e) {}
+    _crowdBed = null;
+  }
 
-  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, musicStart: musicStart, musicStop: musicStop, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, duck: duck, unduck: unduck };
+  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, crowdBedStart: crowdBedStart, crowdBedStop: crowdBedStop };
 })(window);

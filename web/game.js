@@ -1061,6 +1061,7 @@
   function setStage(name) {
     if (name !== 'postplay') rpTeardown();
     Object.keys(panel).forEach(function (k) { panel[k].classList.toggle('hidden', k !== name); });
+    if (window.Sound) { if (name === 'gameover') Sound.crowdBedStop(); else Sound.crowdBedStart(); }   // the recorded crowd bed runs through the game
   }
 
   // ---------- new drive / new play ----------
