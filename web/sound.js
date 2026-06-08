@@ -1,5 +1,6 @@
 // sound.js — procedural arcade SFX + a speechSynthesis announcer for Tactical
-// Football. Uses ZzFX (zzfx.js, loaded first). Zero audio assets. Mute is
+// Football. Uses ZzFX (zzfx.js). Recorded clips in sfx/ are preferred when loaded,
+// with the procedural synth as the always-available fallback. Mute is
 // persisted to localStorage 'tf-sound'; audio unlocks on the player's first
 // gesture. Everything is wrapped so it can never throw on the 60fps path.
 (function (root) {
@@ -142,6 +143,54 @@
     return _bus;
   }
 
+  // ---- recorded-sample playback: prefer a real clip, fall back to procedural ----
+  //   MP3s in web/sfx/ are decoded to AudioBuffers on the first gesture, played
+  //   through the same compressor bus as the synth, round-robined per key, and
+  //   muted-safe. If a clip isn't loaded yet (or is missing) playSample() returns
+  //   false and the caller's procedural version plays — so nothing ever goes silent.
+  var SAMPLE_URLS = {
+    snap:    ['sfx/snap.mp3'],
+    whistle: ['sfx/whistle.mp3'],
+    cheer:   ['sfx/cheer.mp3'],
+    ohh:     ['sfx/ohh.mp3'],
+    hit:     ['sfx/hit1.mp3', 'sfx/hit2.mp3'],
+    catch:   ['sfx/catch1.mp3', 'sfx/catch2.mp3']
+  };
+  var SAMPLES = {}, _rr = {}, _samplesLoaded = false;
+  function loadSamples() {
+    if (_samplesLoaded || typeof zzfxX === 'undefined' || typeof fetch === 'undefined') return;
+    _samplesLoaded = true;
+    Object.keys(SAMPLE_URLS).forEach(function (key) {
+      SAMPLES[key] = [];
+      SAMPLE_URLS[key].forEach(function (url, i) {
+        fetch(url).then(function (r) { return r.ok ? r.arrayBuffer() : null; })
+          .then(function (ab) { return ab ? zzfxX.decodeAudioData(ab) : null; })
+          .then(function (buf) { if (buf) SAMPLES[key][i] = buf; })
+          .catch(function () {});
+      });
+    });
+  }
+  function playSample(key, vol, dur) {
+    if (muted || typeof zzfxX === 'undefined') return false;
+    var arr = SAMPLES[key]; if (!arr) return false;
+    var avail = arr.filter(Boolean); if (!avail.length) return false;   // not decoded yet -> procedural fallback
+    ensureUnlock();
+    try {
+      var c = zzfxX, t = c.currentTime;
+      _rr[key] = ((_rr[key] || 0) + 1) % avail.length;                  // round-robin the variants
+      var src = c.createBufferSource(); src.buffer = avail[_rr[key]];
+      var g = c.createGain(); g.gain.value = vol == null ? 1 : vol;
+      src.connect(g); g.connect(busIn());
+      src.start(t);
+      if (dur) {                                                        // cap + fade long crowd clips
+        g.gain.setValueAtTime(g.gain.value, t + Math.max(0, dur - 0.3));
+        g.gain.linearRampToValueAtTime(0.0001, t + dur);
+        src.stop(t + dur + 0.02);
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+
   // ---- 16-bit synth voice: FM + detuned unison + filter-env + reverb send ----
   //   The Sega/SNES/arcade move ZzFX (an 8-bit micro-synth) can't make: an FM
   //   carrier for a brassy/metallic body, detuned unison for width, a lowpass
@@ -252,6 +301,7 @@
       synth({ f: 1200, type: 'square', fm: { ratio: 3, index: 0.6, decay: 0.1 }, a: .001, d: .012, s: .08, r: .015, dur: .008, vol: .18 });
     },
     snap: function () {
+      if (playSample('snap')) return;                 // the recorded "hut!" (else the procedural snap)
       synth({ f: 150, type: 'square', fm: { ratio: 1.5, index: 3, decay: 0.05 }, slideTo: 90, slideDur: 0.05, a: .002, d: .03, s: .2, r: .04, dur: .03, vol: .34, filt: { f0: 2200, f1: 400, q: 1 } });
       noiseHit(1900, 1.0, 'bandpass', 0.04, 0.40);
       thump(120, 70, 0.05, 0.34);
@@ -264,14 +314,16 @@
       noiseHit(1400, 1.2, 'bandpass', 0.10, 0.22, [1800, 700]);
     },
     catch: function () {
-      synth({ f: 480, type: 'triangle', fm: { ratio: 2, index: 1.8, decay: 0.25 }, slideTo: 640, slideDur: 0.04, a: .003, d: .05, s: .35, r: .1, dur: .07, vol: .22, send: .18 });  // arcade grab pop, softened so the leather is the star
-      leatherCatch();                                                                                                                                                              // the ball-on-pads THWACK
+      if (playSample('catch')) return;                // the recorded ball-on-pads (else the procedural thwack)
+      synth({ f: 480, type: 'triangle', fm: { ratio: 2, index: 1.8, decay: 0.25 }, slideTo: 640, slideDur: 0.04, a: .003, d: .05, s: .35, r: .1, dur: .07, vol: .22, send: .18 });
+      leatherCatch();
     },
     first: function () {
       synth({ f: 784, type: 'sawtooth', uni: [-7, 7], fm: { ratio: 1, index: 2, decay: 0.3 }, a: .004, d: .05, s: .5, r: .1, dur: .08, vol: .26, filt: { f0: 4000, f1: 2000, q: 2 }, send: .25 });
       setTimeout(function () { synth({ f: 1047, type: 'sawtooth', uni: [-7, 7], fm: { ratio: 1, index: 2.4, decay: 0.3 }, a: .004, d: .07, s: .6, r: .18, dur: .16, vol: .28, filt: { f0: 5000, f1: 2200, q: 2 }, send: .35 }); }, 75);
     },
     sack: function () {
+      if (playSample('hit', 1)) { setTimeout(grunt, 70); return; }   // recorded hit + the QB grunt
       noiseHit(850, 1.6, 'bandpass', 0.07, 0.50);
       synth({ f: 170, type: 'sawtooth', fm: { ratio: 1.4, index: 4.5, decay: 0.12 }, slideTo: 65, slideDur: 0.16, a: .002, d: .04, s: .25, r: .1, dur: .1, vol: .4, filt: { f0: 1800, f1: 180, q: 4 }, dist: .45, send: .12 });
       thump(150, 40, 0.18, 0.6);
@@ -306,6 +358,7 @@
       synth({ f: 300, type: 'sawtooth', fm: { ratio: 1.5, index: 2, decay: 0.1 }, slideTo: 180, slideDur: 0.06, a: .002, d: .03, s: .2, r: .05, dur: .05, vol: .26, dist: .2 });
     },
     whistle: function () {
+      if (playSample('whistle')) return;              // the recorded ref whistle
       synth({ f: 2100, type: 'sine', fm: { ratio: 1.005, index: 0.5, decay: 0.8 }, a: .02, d: .05, s: .8, r: .05, dur: .18, vol: .26, send: .15 });
       noiseHit(3400, 1.5, 'bandpass', 0.18, 0.06);
     }
@@ -338,6 +391,7 @@
         mediaEl.play().catch(function () {});
       }
       unlocked = true;
+      loadSamples();                  // kick off the recorded-clip loads on the first gesture
     } catch (e) {}
   }
 
@@ -362,6 +416,7 @@
   //      few random broadband hand-claps so the roar reads full, not hissy.
   function crowd(kind) {
     if (muted || typeof zzfxX === 'undefined') return;
+    if (kind === 'erupt' && playSample('cheer', 0.9, 5)) return;   // the recorded TD roar (capped at 5s)
     ensureUnlock();
     var spec = {
       murmur: { dur: 0.9, peak: 0.10, rise: 0.55, f0: 600,  f1: 600,  q: 0.5 }, // idle
@@ -498,6 +553,7 @@
   }
   function tackle(big) {                             // dark body-on-body impact; big = gang-tackle crunch
     if (muted || typeof zzfxX === 'undefined') return;
+    if (playSample('hit', big ? 1 : 0.85)) return;   // the recorded hit (else the procedural thud)
     ensureUnlock();
     try {
       var c = zzfxX, t = c.currentTime, sr = c.sampleRate, dur = 0.16,
@@ -530,6 +586,7 @@
   }
   function crowdOhh(loud) {                          // disappointed falling 'ohhh': groan bed + low /ɔ/ formant voices
     if (muted || typeof zzfxX === 'undefined') return;
+    if (playSample('ohh', loud ? 1 : 0.85, 4)) return;   // the recorded crowd 'ohhh' (capped at 4s)
     crowd('groan');                                  // the noise bed = the size
     var pitches = [92, 98, 110, 124, 131, 103], v = loud ? 0.07 : 0.055;
     pitches.forEach(function (p) {

@@ -962,6 +962,7 @@
     advanceDown(result);
 
     const o = result.outcome;
+    if (window.Sound && o !== 'interception' && driveResult !== 'td') setTimeout(function () { sfx('whistle'); }, 160);  // ref whistles the play dead
     let cls = 'neutral', txt = '';
     if (o === 'completion') { cls = 'good'; txt = 'Completion +' + result.yards; }
     else if (o === 'interception') { cls = 'bad'; txt = 'INTERCEPTED'; }
