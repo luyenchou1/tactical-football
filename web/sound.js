@@ -201,7 +201,7 @@
         amp.connect(lp); node = lp;
       }
       if (o.dist) { var ws = c.createWaveShaper(); ws.curve = distCurve(o.dist); ws.oversample = '2x'; node.connect(ws); node = ws; }
-      node.connect(o.bus || busIn());   // o.bus routes a voice to a sub-bus (e.g. the music bed)
+      node.connect(busIn());
       if (o.send) { var sg = c.createGain(); sg.gain.value = o.send; node.connect(sg); sg.connect(reverbIn()); }
 
       var uni = o.uni || [0], carriers = [];
@@ -605,27 +605,19 @@
     if (!document.hidden && unlocked) { try { if (zzfxX.state !== 'running') zzfxX.resume(); } catch (e) {} }
   });
 
-  // ---------- ambient crowd murmur bed + NFL-Films-style music bed ----------
-  //   Two persistent beds on their OWN gain buses so duck() dips them on the snap
-  //   and unduck() swells them back between plays. Music voices route via
-  //   synth({bus}) into _musicBus (self-contained). The murmur starts ONCE and is
-  //   level-driven by duck/unduck — never reallocated per play. Both stop cleanly
-  //   on mute / gameover. (Replaces the old menu arpeggio.)
-  var MUSIC_VOL = 0.35, AMBIENT_VOL = 0.05, AMBIENT_DUCK = 0.014;
-  var _ambientGain = null, _musicBus = null, _murmur = null;
-  var _musicOn = false, _musicTimer = 0, _midTimer = 0;
+  // ---------- ambient crowd murmur bed ----------
+  //   A quiet, persistent distant-crowd bed on its own gain bus. duck() dips it on
+  //   the snap so the SFX cut through; unduck() swells it back between plays. Starts
+  //   ONCE and is level-driven (never reallocated per play). Stops on mute/gameover.
+  //   (A procedural music bed lived here too, but it read as ominous sci-fi — cut.)
+  var AMBIENT_VOL = 0.05, AMBIENT_DUCK = 0.014;
+  var _ambientGain = null, _murmur = null;
 
-  function ambientGain() {                      // murmur bus (null fallback — never alias the master)
+  function ambientGain() {                       // murmur bus (null fallback — never alias the master)
     if (_ambientGain) return _ambientGain;
     try { _ambientGain = zzfxX.createGain(); _ambientGain.gain.value = 0.0001; _ambientGain.connect(busIn()); }
     catch (e) { _ambientGain = null; }
     return _ambientGain;
-  }
-  function musicBus() {                          // music bus (null fallback)
-    if (_musicBus) return _musicBus;
-    try { _musicBus = zzfxX.createGain(); _musicBus.gain.value = MUSIC_VOL; _musicBus.connect(busIn()); }
-    catch (e) { _musicBus = null; }
-    return _musicBus;
   }
   function brownBuffer(sec) {                    // brown noise = a soft, hiss-free distant babble
     var c = zzfxX, sr = c.sampleRate, n = Math.max(1, (sr * sec) | 0), b = c.createBuffer(1, n, sr), d = b.getChannelData(0), last = 0;
@@ -665,71 +657,18 @@
     } catch (e) {}
     _murmur = null;
   }
-  function duck() {                              // snap: music -> silent, murmur -> a low floor
-    if (typeof zzfxX === 'undefined') return;
-    try {
-      var t = zzfxX.currentTime;
-      if (_musicBus) { _musicBus.gain.cancelScheduledValues(t); _musicBus.gain.setTargetAtTime(0.0001, t, 0.05); }
-      if (_ambientGain && _murmur) { _ambientGain.gain.cancelScheduledValues(t); _ambientGain.gain.setTargetAtTime(AMBIENT_DUCK, t, 0.05); }
-    } catch (e) {}
+  function duck() {                              // snap: dip the crowd so the SFX cut through
+    if (typeof zzfxX === 'undefined' || !_ambientGain || !_murmur) return;
+    try { var t = zzfxX.currentTime; _ambientGain.gain.cancelScheduledValues(t); _ambientGain.gain.setTargetAtTime(AMBIENT_DUCK, t, 0.05); } catch (e) {}
   }
-  function unduck() {                            // between plays: swell both back
-    if (typeof zzfxX === 'undefined') return;
-    try {
-      var t = zzfxX.currentTime;
-      if (_musicBus && _musicOn) { _musicBus.gain.cancelScheduledValues(t); _musicBus.gain.setTargetAtTime(MUSIC_VOL, t, 0.4); }
-      if (_ambientGain && _murmur) { _ambientGain.gain.cancelScheduledValues(t); _ambientGain.gain.setTargetAtTime(AMBIENT_VOL, t, 0.5); }
-    } catch (e) {}
+  function unduck() {                            // between plays: swell back
+    if (typeof zzfxX === 'undefined' || !_ambientGain || !_murmur) return;
+    try { var t = zzfxX.currentTime; _ambientGain.gain.cancelScheduledValues(t); _ambientGain.gain.setTargetAtTime(AMBIENT_VOL, t, 0.5); } catch (e) {}
   }
-
-  // NFL-Films-style bed: heroic-minor 4-chord loop Gm-Eb-Bb-Dm, brass + string pad
-  // + timpani, all via _musicBus. The scheduler keeps RUNNING while ducked so the
-  // music resumes mid-phrase between plays.
-  var CH = { Gm: [98.0, 116.5, 146.8], Eb: [77.8, 98.0, 116.5], Bb: [116.5, 146.8, 174.6], Dm: [73.4, 87.3, 110.0] };
-  var SEQ = ['Gm', 'Eb', 'Bb', 'Dm'], ROOTS = [49.0, 77.8, 58.3, 73.4];
-  var BEAT = 0.682, BAR_MS = Math.round(BEAT * 4 * 1000);
-  function mBrass(name) {                        // detuned-saw "horns": amp attacks fast, filter opens slow = stately
-    chord(CH[name], { bus: musicBus(), type: 'sawtooth', uni: [-7, 0, 7], fm: { ratio: 1, index: 0.5, decay: 0.4 },
-      a: 0.09, d: 0.15, s: 0.85, r: 0.5, dur: 2.6, vol: 0.06, filt: { f0: 600, f1: 3200, q: 1.5 }, send: 0.2 });
-  }
-  function mPad(name) {                          // soft octave-up string pad
-    chord(CH[name].map(function (n) { return n * 2; }), { bus: musicBus(), type: 'sawtooth', uni: [-9, 0, 9],
-      a: 0.9, d: 0.3, s: 0.9, r: 1.0, dur: 2.7, vol: 0.04, filt: { f0: 900, f1: 1600, q: 0.7 }, send: 0.4 });
-  }
-  function mTimpani(R, vol) {                     // pitched sine body (drops) + 2 inharmonic partials
-    var bus = musicBus();
-    synth({ bus: bus, f: R, type: 'sine', slideTo: R * 0.94, a: 0.002, d: 0.12, s: 0.15, r: 0.3, dur: 0.3, vol: 0.5 * vol });
-    [[R * 1.5, 0.05], [R * 1.98, 0.04]].forEach(function (p) {
-      synth({ bus: bus, f: p[0], type: 'sine', a: 0.002, d: 0.06, s: 0.1, r: 0.18, dur: 0.12, vol: p[1] * vol });
-    });
-  }
-  function musicBar(i) {
-    if (!_musicOn || muted) { _musicTimer = 0; return; }
-    var name = SEQ[i % 4], root = ROOTS[i % 4];
-    try {
-      mPad(name); mBrass(name); mTimpani(root, 1);
-      _midTimer = setTimeout(function () { if (_musicOn && !muted) mTimpani(root, 0.6); }, Math.round(2 * BEAT * 1000));  // beat-3 march pulse (tracked)
-    } catch (e) {}
-    _musicTimer = setTimeout(function () { musicBar(i + 1); }, BAR_MS);
-  }
-  function musicBedStop() {
-    _musicOn = false;
-    if (_musicTimer) { clearTimeout(_musicTimer); _musicTimer = 0; }
-    if (_midTimer) { clearTimeout(_midTimer); _midTimer = 0; }
-    if (_musicBus) { try { var t = zzfxX.currentTime; _musicBus.gain.cancelScheduledValues(t); _musicBus.gain.setTargetAtTime(0.0001, t, 0.25); } catch (e) {} }
-  }
-
-  // public lifecycle (setStage drives these): both beds together; idempotent start.
-  function musicStart() {
-    if (muted || typeof zzfxX === 'undefined') return;
-    ensureUnlock();
-    if (!_musicOn) {
-      var bus = musicBus();
-      if (bus) { _musicOn = true; try { var t = zzfxX.currentTime; bus.gain.cancelScheduledValues(t); bus.gain.setTargetAtTime(MUSIC_VOL, t, 0.4); } catch (e) {} musicBar(0); }
-    }
-    murmurStart();
-  }
-  function musicStop() { musicBedStop(); murmurStop(); }
+  // lifecycle names kept so setStage's wiring still drives the crowd bed (start it,
+  // dip on the snap, swell back, stop at gameover) with no game.js change.
+  function musicStart() { if (muted) return; ensureUnlock(); murmurStart(); }
+  function musicStop() { murmurStop(); }
 
   root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, musicStart: musicStart, musicStop: musicStop, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, murmurStart: murmurStart, murmurStop: murmurStop, duck: duck, unduck: unduck };
 })(window);
