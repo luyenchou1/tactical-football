@@ -43,6 +43,14 @@ function ratePct(opts, outcome, N) {
     return (c / N) * 100;
   } finally { Math.random = orig; }
 }
+function avgYards(opts, N) {
+  const orig = Math.random; Math.random = mulberry32(0x1a2b3c4d);
+  try {
+    let y = 0;
+    for (let i = 0; i < N; i++) y += Sim.resolvePlay(opts).yards;
+    return y / N;
+  } finally { Math.random = orig; }
+}
 const BASE = { receiver: P.slot, defender: P.nb, lb: P.mlb, qb: P.qb };
 
 test('invariants: every route × coverage × leverage is well-formed', () => {
@@ -89,4 +97,21 @@ test('risk axis: pass-rush sacks and forced-read INTs stay calibrated', () => {
   // direction (seed-robust): depth is sacked more vs blitz; forcing into coverage is picked more
   assert.ok(digBlitzSack > slantBlitzSack + 5, 'deep routes must be sacked more than quick vs blitz');
   assert.ok(digIntoInt > slantBeatInt, 'forcing a deep route into coverage must be picked more than a good read');
+});
+
+// Screen — the blitz-beater (a deliberate balance addition; these bands acknowledge it).
+// Sack-proof + INT-proof, a chunk vs the vacated blitz, a wasted down vs a disciplined man front.
+test('calibration: screen is a bet on the blitz (big vs blitz, wasted down vs man)', () => {
+  const N = 6000;
+  const SC = { ...BASE, route: 'screen', receiver: P.rb };   // the RB runs the screen
+  const blitzCmp = cmpPct({ ...SC, coverage: 'blitz', leverage: 'outside' }, N);
+  const manCmp = cmpPct({ ...SC, coverage: 'man', leverage: 'outside' }, N);
+  const blitzYpa = avgYards({ ...SC, coverage: 'blitz', leverage: 'outside' }, N);
+  const manYpa = avgYards({ ...SC, coverage: 'man', leverage: 'outside' }, N);
+  const blitzBad = ratePct({ ...SC, coverage: 'blitz', leverage: 'outside' }, 'interception', N)
+                 + ratePct({ ...SC, coverage: 'blitz', leverage: 'outside' }, 'sack', N);
+  assert.ok(blitzCmp >= 88 && blitzCmp <= 96, `screen/blitz cmp ${blitzCmp.toFixed(1)}% out of [88, 96]`);
+  assert.ok(manCmp >= 54 && manCmp <= 62, `screen/man cmp ${manCmp.toFixed(1)}% out of [54, 62]`);
+  assert.ok(blitzYpa > manYpa + 4, `screen blitz YPA ${blitzYpa.toFixed(1)} must exceed man YPA ${manYpa.toFixed(1)} by 4+`);
+  assert.equal(blitzBad, 0, 'screen is sack-proof and INT-proof vs the blitz');
 });

@@ -68,10 +68,22 @@ ROUTES = {
     "go":     {"depth": 17, "break": None,  "man_base": -9, "zone_sep": -5, "zone_lane": 10, "yac": 2, "tt": 3.8},
     "post":   {"depth": 16, "break": "in",  "man_base": -6, "zone_sep": 5,  "zone_lane": 18, "yac": 2, "tt": 3.4},
     "corner": {"depth": 16, "break": "out", "man_base": -3, "zone_sep": 4,  "zone_lane": 10, "yac": 1, "tt": 3.2},
+    # screen — caught behind the LOS; resolves on coverage ALONE via the screen branch in resolve()
+    # (man_base/zone_sep/zone_lane inert, yac cosmetic). Inverse of a deep shot: sack-proof + INT-proof,
+    # a chunk vs the vacated blitz, a wasted down vs a disciplined front.
+    "screen": {"depth": 1,  "break": None,  "man_base": 0,  "zone_sep": 0,   "zone_lane": 0,  "yac": 6, "tt": 1.1, "screen": True},
+    # sail — deep out into the sideline void behind the flat defender (Flood's high-low in one vector):
+    # beats zone, leverage-dependent vs man, tt-taxed vs blitz so it can't be mashed.
+    "sail":   {"depth": 13, "break": "out", "man_base": -2, "zone_sep": 10,  "zone_lane": 40, "yac": 2, "tt": 3.0},
+    # wheel — the RB up the sideline vs a linebacker: beats man (esp. inside leverage), dead vs zone.
+    "wheel":  {"depth": 12, "break": "out", "man_base": 8,  "zone_sep": -4,  "zone_lane": 38, "yac": 3, "tt": 3.0},
 }
 
 CATCH_BONUS = {"great": 30, "good": 15, "ok": 0, "low": -20, "bad": -40}
 QUALITY_PENALTY = {"great": -20, "good": -10, "ok": 0, "low": 10, "bad": 25}
+# screen — coverage is the only axis (a bet on the blitz): connect% = completion, yac_base = blocking lead
+SCREEN_CONNECT = {"blitz": 92, "zone": 70, "man": 58}
+SCREEN_YAC = {"blitz": 7, "zone": 3, "man": 1}
 
 PROTECT = {"base": 2.0, "blitz": 1.5}
 SACK = {"base": 2, "blitz": 9, "perSec": 8}
@@ -111,6 +123,19 @@ def resolve(rec: Player, qb_p: Player, defn: Player, lb: Player,
     depth_pen = max(0, rt["depth"] - 5) // 2
     is_blitz = coverage == "blitz"
     is_zone = coverage == "zone"
+
+    # SCREEN — a bet on the blitz (mirror of JS resolvePlay screen branch): coverage is the only axis,
+    # sack-proof + INT-proof, a chunk vs the vacated blitz, a wasted down vs a disciplined front.
+    # EXACTLY 2 rolls (connect, then yac) in this order to stay aligned with the JS branch.
+    if rt.get("screen"):
+        cov = "blitz" if is_blitz else "zone" if is_zone else "man"
+        conn_roll = d100()
+        if conn_roll > SCREEN_CONNECT[cov]:
+            return {"outcome": "incomplete", "yards": 0}
+        screen_yac = max(0, SCREEN_YAC[cov]
+                         + (rec.r("BTK") + rec.r("SPD") - lb.r("TKL") - lb.r("SPD")) // 10
+                         + d100() // 25)
+        return {"outcome": "completion", "yards": 1 + screen_yac}
 
     # separation + read
     if is_zone:

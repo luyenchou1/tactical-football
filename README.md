@@ -2,7 +2,7 @@
 
 Turn-based tactical American football for mobile — think **XCOM-meets-football**. You read each defender's **leverage** and the disguised look, call a play, and **set** — the defense declares its true coverage (a man look can roll to Cover 3) so you can **audible** — then **hike** and find the open man in a short window before the pass rush gets home, all resolved through a chain of rating-driven dice rolls.
 
-> **Status:** playable, and now juicy. A 6-play book over 10 routes — including deep shots (go, post, corner) — 3 **disguised** defensive looks you diagnose **post-snap** in a timed read window, a pass rush + sacks, interceptions on forced reads, and a 5-round game vs a CPU opponent — wrapped in an arcade audiovisual layer (NES field, procedural 8-bit sound, an announcer, screen shake, confetti, and NBA-Jam-style callouts). The matchup math runs in two engines (JS + a Python mirror) kept in sync and guarded by a test suite.
+> **Status:** playable, and now juicy. A 9-play book over 13 routes — including deep shots (go, post, corner) and an RB screen — 3 **disguised** defensive looks you diagnose **post-snap** in a timed read window, a pass rush + sacks, interceptions on forced reads, and a 5-round game vs a CPU opponent — wrapped in an arcade audiovisual layer (NES field, procedural 8-bit sound, an announcer, screen shake, confetti, and NBA-Jam-style callouts). The matchup math runs in two engines (JS + a Python mirror) kept in sync and guarded by a test suite.
 
 ## Play it
 
@@ -90,7 +90,7 @@ It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) a
 - [x] Game arc: multi-round games with a saved high score
 - [x] Second coverage (Cover 3 zone): the read flips — hitch beats zone, leverage beats man
 - [x] An opponent (abstracted CPU possessions) for a true win/lose result
-- [x] Playbook (6 plays, 10 routes) — pick a play and target any of 5 receivers
+- [x] Playbook (9 plays, 13 routes) — pick a play and target any of 5 receivers
 - [x] Risk/reward: pass rush + pocket clock (sacks), the blitz, and INTs on forced reads
 - [x] Tuned opponent, a zero-dep Node test harness, and a drive-level balance sim
 - [x] Arcade audiovisual layer: NES re-skin + pixel fonts, procedural sound + announcer + menu music, screen shake, particles, SLAM callouts, on-fire streak, painted field + CRT finish
@@ -108,6 +108,7 @@ It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) a
 - [x] Instant replay — scrub/step the play back in slow-mo, KPI breakdown synced to each frame
 - [ ] Coach both sides — call defense on the opponent's possessions
 - [x] Deep shots — go / post / corner verticals: the post/corner leverage read downfield, Four Verticals + Smash, the shot as the blitz answer (tuned so blind bombing stays break-even)
+- [x] Playbook II — an RB **screen** (the blitz-beater mirror of the bomb: a dedicated sack/INT-proof branch that's a chunk vs the vacated blitz but a wasted down vs a disciplined front), a **Flood** (corner/sail/flat sideline stretch — a new *shape* of zone-beater), and an RB **Wheel** (a man-beater that finally varies the back off the flat)
 - [ ] Safety help in the model — a true single-high robber bracketing the deep post
 
 ## The Swift simulator

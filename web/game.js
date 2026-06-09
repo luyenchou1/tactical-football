@@ -73,6 +73,12 @@
       routes: { x: 'go', z: 'go', slot: 'post', te: 'corner', rb: 'flat' } },
     { id: 'smash',   name: 'Smash', tag: 'zone-beater · deep',
       routes: { x: 'hitch', z: 'corner', slot: 'hitch', te: 'drag', rb: 'flat' } },
+    { id: 'screen',  name: 'RB Screen', tag: 'blitz-beater · screen',
+      routes: { x: 'go', z: 'hitch', slot: 'go', te: 'curl', rb: 'screen' } },
+    { id: 'flood',   name: 'Flood', tag: 'zone-beater · sideline',
+      routes: { x: 'dig', z: 'corner', slot: 'sail', te: 'drag', rb: 'flat' } },
+    { id: 'wheel',   name: 'Wheel', tag: 'man-beater · RB',
+      routes: { x: 'go', z: 'post', slot: 'drag', te: 'dig', rb: 'wheel' } },
   ];
 
   // ---------- route geometry (parametric: applied to each receiver's start) ----------
@@ -90,6 +96,12 @@
       case 'go':    return [[x, y], [x, y + 4.5], [x, y + 9], [x, y + 13], [x, y + 13], [x, y + 16]];
       case 'post':  return [[x, y], [x, y + 5], [x, y + 9.5], [x + inX * 3, y + 12.5], [x + inX * 3, y + 12.5], [x + inX * 6.5, y + 15]];
       case 'corner':return [[x, y], [x, y + 5], [x, y + 9.5], [x + out * 2, y + 12.5], [x + out * 2, y + 12.5], [x + out * 4, y + 15]];
+      // screen — slip out behind the LOS toward the sideline, catch near the line, run after it
+      case 'screen':return [[x, y], [x + out * 2, y - 0.5], [x + out * 4, y], [x + out * 5, y + 1], [x + out * 5, y + 1], [x + out * 8, y + 4]];
+      // sail — vertical stem then a hard out-break into the sideline void behind the flat defender
+      case 'sail':  return [[x, y], [x, y + 5], [x, y + 9], [x + out * 4, y + 11], [x + out * 4, y + 11], [x + out * 7, y + 11.5]];
+      // wheel — flat release, then turn and run up the sideline (the RB vs a linebacker)
+      case 'wheel': return [[x, y], [x + out * 3, y + 1], [x + out * 5, y + 3], [x + out * 5.5, y + 8], [x + out * 5.5, y + 8], [x + out * 6, y + 13]];
       default:      return [[x, y], [x, y + 2], [x, y + 4], [x, y + 5], [x, y + 5], [x, y + 6]];
     }
   }

@@ -35,6 +35,9 @@ const PLAYS = [
   { id: 'spacing', routes: { x: 'hitch', z: 'out',   slot: 'curl',  te: 'drag', rb: 'flat' } },
   { id: 'verticals', routes: { x: 'go',  z: 'go',    slot: 'post',  te: 'corner', rb: 'flat' } },
   { id: 'smash',   routes: { x: 'hitch', z: 'corner', slot: 'hitch', te: 'drag', rb: 'flat' } },
+  { id: 'screen',  routes: { x: 'go',    z: 'hitch', slot: 'go',    te: 'curl', rb: 'screen' } },
+  { id: 'flood',   routes: { x: 'dig',   z: 'corner', slot: 'sail',  te: 'drag', rb: 'flat' } },
+  { id: 'wheel',   routes: { x: 'go',    z: 'post',  slot: 'drag',  te: 'dig',  rb: 'wheel' } },
 ];
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -57,7 +60,10 @@ const STATUS_RANK = { good: 2, neutral: 1, bad: 0 };
 function chooseRandom(opts) { return pick(opts); }
 
 function chooseSmart(opts) {
-  // best read; tie-break by deeper route (more reward on a safe read)
+  // best read; tie-break by deeper route (more reward on a safe read). NOTE: this realistic
+  // reader does NOT perfectly exploit the screen — a perfect-info reader that always screens vs
+  // blitz hits ~80%+ (the screen is a no-risk blitz answer), but the in-game coverage DISGUISE
+  // gates that: you must read the blitz under the timer to call it. So the proxy stays honest at ~70.
   let best = opts[0];
   for (const o of opts) {
     const a = STATUS_RANK[o.status], b = STATUS_RANK[best.status];

@@ -34,10 +34,22 @@
     go:     { depth: 17, brk: null,  manBase: -9, zoneSep: -5,  zoneLane: 10, yac: 2, tt: 3.8 },
     post:   { depth: 16, brk: 'in',  manBase: -6, zoneSep: 5,   zoneLane: 18, yac: 2, tt: 3.4 },
     corner: { depth: 16, brk: 'out', manBase: -3, zoneSep: 4,   zoneLane: 10, yac: 1, tt: 3.2 },
+    // screen — caught behind the LOS; resolves on coverage ALONE via the rt.screen branch in
+    // resolvePlay (manBase/zoneSep/zoneLane are inert, yac is cosmetic). The inverse of a deep
+    // shot: sack-proof + INT-proof, a chunk vs the vacated blitz, a wasted down vs a disciplined front.
+    screen: { depth: 1,  brk: null,  manBase: 0,  zoneSep: 0,   zoneLane: 0,  yac: 6, tt: 1.1, screen: true },
+    // sail — a deep out into the sideline void behind the flat defender (the Flood's high-low in one
+    // vector): beats zone, leverage-dependent vs man, tt-taxed vs blitz so it can't be mashed.
+    sail:   { depth: 13, brk: 'out', manBase: -2, zoneSep: 10,  zoneLane: 40, yac: 2, tt: 3.0 },
+    // wheel — the RB up the sideline vs a linebacker: beats man (esp. inside leverage), dead vs zone.
+    wheel:  { depth: 12, brk: 'out', manBase: 8,  zoneSep: -4,  zoneLane: 38, yac: 3, tt: 3.0 },
   };
 
   const CATCH_BONUS = { great: 30, good: 15, ok: 0, low: -20, bad: -40 };
   const QUALITY_PENALTY = { great: -20, good: -10, ok: 0, low: 10, bad: 25 };
+  // screen — coverage is the only axis (a bet on the blitz): connect% = completion, yacBase = blocking lead
+  const SCREEN_CONNECT = { blitz: 92, zone: 70, man: 58 };
+  const SCREEN_YAC = { blitz: 7, zone: 3, man: 1 };
 
   // ---------- pass-rush model ----------
   const PROTECT = { base: 2.0, blitz: 1.5 };       // seconds the pocket holds
@@ -58,6 +70,7 @@
   // field cue and the post-play breakdown can never drift from the math.
   function readStatus(route, coverage, leverage) {
     const rt = ROUTES[route] || ROUTES.slant;
+    if (rt.screen) return coverage === 'blitz' ? 'good' : coverage === 'man' ? 'bad' : 'neutral';   // screen = a bet on the blitz
     if (coverage === 'zone') return rt.zoneSep > 10 ? 'good' : rt.zoneSep >= 0 ? 'neutral' : 'bad';
     if (coverage === 'blitz') return rt.tt <= 1.6 ? 'good' : 'neutral';   // quick = safe; deeper = a viable high-EV shot (never auto-'bad' vs a vacated zone)
     const levB = levTerm(rt.brk, leverage);
@@ -68,6 +81,7 @@
   // the visual gap in the read window. MUST mirror the sepTarget math in resolvePlay().
   function expectedSep(opts) {
     const rt = ROUTES[opts.route] || ROUTES.slant;
+    if (rt.screen) return opts.coverage === 'blitz' ? 80 : opts.coverage === 'man' ? 54 : 64;   // screen openness tracks connect%, not coverage separation
     const rec = opts.receiver, defn = opts.defender;
     if (opts.coverage === 'zone') return 56 + rt.zoneSep + trunc((rec.r.RTE - defn.r.ZON) / 4);
     const vacated = opts.coverage === 'blitz' ? 8 : 0;
@@ -106,6 +120,35 @@
     const meta = { route: route, coverage: coverage, leverage: leverage, receiver: rec.name,
                    undercut: false, sep: 0, window: 0, caught: false, intercepted: false,
                    sacked: false, hurried: false };
+
+    // SCREEN — a bet on the blitz. Resolves on coverage ALONE: sack-proof + INT-proof, a chunk vs the
+    // vacated blitz front, a wasted down vs a disciplined man/zone front. Own mini-chain (read → screen →
+    // yac); EXACTLY 2 rolls (connect, then yac) — MUST mirror simulate.py's screen branch in the same order.
+    if (rt.screen) {
+      const cov = isBlitz ? 'blitz' : isZone ? 'zone' : 'man';
+      chain.push({
+        key: 'read', label: 'Coverage', value: (isBlitz ? 'Blitz · ' : isZone ? 'Cover 3 · ' : 'Man · ') + 'Screen',
+        status: readStatus(route, coverage, leverage),
+        detail: isBlitz ? 'Blitz — the rush vacates; blockers lead the screen'
+              : isZone ? 'Zone droppers read the screen — a modest gain'
+              : 'A disciplined man front strings the screen out',
+        math: 'screen vs ' + cov + ': connect ' + SCREEN_CONNECT[cov] + '%',
+      });
+      const connRoll = d100();
+      if (connRoll > SCREEN_CONNECT[cov]) {
+        chain.push({ key: 'screen', label: 'Screen', value: 'blown up', status: 'bad',
+          detail: lb.name + ' sniffs it out — no room to run', math: 'rolled ' + connRoll + ' > ' + SCREEN_CONNECT[cov] });
+        return finish('incomplete', 0, chain, meta);
+      }
+      meta.caught = true;
+      const screenYac = Math.max(0, SCREEN_YAC[cov] + trunc((rec.r.BTK + rec.r.SPD - lb.r.TKL - lb.r.SPD) / 10) + trunc(d100() / 25));
+      chain.push({ key: 'screen', label: 'Screen', value: isBlitz ? 'sprung' : 'caught', status: isBlitz ? 'good' : 'neutral',
+        detail: isBlitz ? 'Caught behind the rush with blockers ahead' : 'Caught at the line — defenders rally',
+        math: 'connect ' + connRoll + ' ≤ ' + SCREEN_CONNECT[cov] });
+      chain.push({ key: 'yac', label: 'After catch', value: '+' + screenYac + ' yd', status: screenYac >= 6 ? 'good' : 'neutral',
+        detail: 'Blockers lead the ballcarrier', math: 'yac = ' + SCREEN_YAC[cov] + ' base + run-after' });
+      return finish('completion', 1 + screenYac, chain, meta);
+    }
 
     // 1 — separation + read
     let sepTarget, sepRoll, sepMargin, levB = 0, badRead = false;
