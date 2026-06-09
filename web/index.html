@@ -52,8 +52,30 @@
     <!-- Controls / breakdown -->
     <section id="panel">
 
+      <!-- ARCADE START / ATTRACT -->
+      <div id="start" class="panel-stage hidden">
+        <div id="start-kicker">TURN-BASED ARCADE FOOTBALL</div>
+        <div id="start-title">
+          <span class="tf-1">TACTICAL</span>
+          <span class="tf-2">FOOTBALL</span>
+        </div>
+        <div id="start-mode">
+          <button class="mode-opt selected" data-mode="1p" type="button">
+            <span class="mode-k">1 PLAYER</span>
+            <span class="mode-s">vs CPU</span>
+          </button>
+          <button class="mode-opt locked" data-mode="2p" type="button" aria-disabled="true">
+            <span class="mode-k">2 PLAYER</span>
+            <span class="mode-s">coming soon</span>
+            <span class="soon-pill">SOON</span>
+          </button>
+        </div>
+        <button id="start-btn" type="button">START ›</button>
+        <div id="start-foot">5 DRIVES · BEAT THE CPU · ⚡ ON FIRE</div>
+      </div>
+
       <!-- PRE-SNAP -->
-      <div id="presnap" class="panel-stage">
+      <div id="presnap" class="panel-stage hidden">
         <div id="read-banner">
           <span id="read-text"></span>
           <button id="hint-btn" class="ghost-btn" aria-pressed="false">Coach hint</button>
@@ -108,12 +130,14 @@
 
       <!-- GAME OVER -->
       <div id="gameover" class="panel-stage hidden">
-        <div id="go-title">Final</div>
-        <div id="go-score">0</div>
-        <div id="go-sub">0 touchdowns in 5 drives</div>
-        <div id="go-grade">F</div>
+        <div id="go-title">FINAL</div>
+        <div id="go-winner"></div>
+        <div id="go-score">0-0</div>
+        <div id="go-sub"></div>
+        <div id="go-grade-wrap"><div id="go-grade">F</div></div>
+        <div id="top-performers" class="hidden"></div>
         <div id="go-best" class="go-best">Best 0</div>
-        <button id="new-game-btn">New game ›</button>
+        <button id="new-game-btn">NEW GAME ›</button>
       </div>
     </section>
   </div>

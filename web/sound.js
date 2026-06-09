@@ -741,5 +741,5 @@
     } catch (e) {}
   }
 
-  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, crowdBedStart: crowdBedStart, crowdBedStop: crowdBedStop, crowdLevel: crowdLevel, band: band };
+  root.Sound = { sfx: sfx, crowd: crowd, fanfare: fanfare, whoosh: whoosh, ding: ding, announce: announce, setMuted: setMuted, isMuted: isMuted, ensureUnlock: ensureUnlock, grunt: grunt, tackle: tackle, leatherCatch: leatherCatch, crowdOhh: crowdOhh, crowdGasp: crowdGasp, formant: formant, crowdBedStart: crowdBedStart, crowdBedStop: crowdBedStop, crowdLevel: crowdLevel, band: band, preload: loadSamples };
 })(window);

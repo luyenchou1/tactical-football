@@ -25,6 +25,22 @@
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-arcade: "Press Start 2P", monospace;   /* pixel display — short labels/scores only */
   --font-term: "VT323", ui-monospace, monospace; /* terminal readout — changing stat numbers */
+
+  /* ===== TYPE ROLES — only two webfonts (system = emergency fallback only) =====
+     --font-arcade (Press Start 2P) = CHROME: fixed UI the player does not read as
+         prose — scores, grades, buttons, kickers, HUD labels, callouts, result verdict,
+         player names. Always UPPERCASE, letter-spacing >= .02em, sizes on --fs-* scale.
+     --font-term (VT323) = FEED: anything generated at runtime — commentary, reads,
+         captions, stat lines, breakdown, drive banner. Tall, readable at 15-22px.
+     --font = fallback only; no element should *intend* it. ============================ */
+  --fs-kicker: 11px;  /* CHROME kickers: FINAL, MODE, TOP PERFORMERS, go-title */
+  --fs-cta: 13px;     /* button labels */
+  --fs-verdict: 18px; /* CHROME result line / picker name impact (PS2P at 22 overflows 375) */
+  --fs-hero: 22px;    /* START title lines, winner headline */
+  --fs-grade: 30px;   /* end grade stamp letter */
+  --fs-score: 40px;   /* big scoreboard (NOT 64 — two numbers + labels must fit 375) */
+  --fs-feed: 17px;    /* VT323 body: commentary, reads, hint, stat lines */
+  --fs-micro: 9px;    /* PS2P fine print: COMING SOON pill, read-window title */
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -34,7 +50,7 @@ html, body {
   padding: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font);
+  font-family: var(--font-term);   /* FEED is the body default; mid-load FOUT degrades to VT323 (already loaded for HUD), not system sans */
   overscroll-behavior: none;
 }
 
@@ -156,34 +172,23 @@ html, body {
 
 /* read banner */
 #read-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-#read-text { font-size: 14px; color: var(--ink); }
-#read-text b { color: var(--star); text-transform: capitalize; }
+#read-text { font-family: var(--font-term); font-size: var(--fs-feed); color: var(--ink); }   /* FEED: 'Defense: … — audible or hike' reads as a sentence */
+#read-text b { font-family: var(--font-arcade); font-size: 11px; letter-spacing: .02em; color: var(--star); }   /* CHROME: MAN / COVER 3 / BLITZ pops as a pixel label (names already uppercase in JS) */
 .ghost-btn {
   background: transparent; color: var(--muted);
   border: 1px solid #2a323e; border-radius: 14px;
-  padding: 5px 11px; font-size: 12px; font-weight: 600; cursor: pointer;
+  padding: 5px 11px; font-family: var(--font-arcade); font-size: var(--fs-micro); letter-spacing: .02em; cursor: pointer;   /* CHROME micro: joins the CTA family (was lone system sans) */
 }
 .ghost-btn[aria-pressed="true"] { color: var(--ink); border-color: var(--los); }
 .hint {
   background: var(--panel-2); border: 1px solid #283142; border-radius: 8px;
-  padding: 10px 12px; font-size: 13px; line-height: 1.45; color: #cdd7e3;
+  padding: 10px 12px; font-family: var(--font-term); font-size: 16px; line-height: 1.3; color: #cdd7e3;   /* FEED: coaching prose (VT323 sized up from 13) */
 }
-.hint b { color: var(--star); }
+.hint b { color: var(--star); }   /* stays FEED — wraps lowercase prose words (press/off/creeping), so NOT arcade */
 
-.route-label { font-size: 11px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }
+.route-label { font-family: var(--font-arcade); font-size: 9px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }   /* CHROME section kicker ('Choose a play' / 'Target a receiver') */
 
-#route-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.route-btn {
-  background: var(--panel-2); color: var(--ink);
-  border: 1.5px solid #2a323e; border-radius: 10px;
-  padding: 12px 6px; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  transition: border-color .15s, background .15s, transform .08s;
-}
-.route-btn:active { transform: scale(0.97); }
-.route-btn.selected { border-color: var(--star); background: #232a36; }
-.route-name { font-size: 15px; font-weight: 800; }
-.route-sub { font-size: 10px; color: var(--muted); }
+/* (removed dead #route-picker/.route-btn/.route-name/.route-sub block — live pre-snap UI is #play-picker/.play-btn) */
 
 /* play + target pickers */
 #play-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -194,8 +199,8 @@ html, body {
 }
 .play-btn:active { transform: scale(0.98); }
 .play-btn.selected { border-color: var(--star); background: #232a36; }
-.play-name { font-size: 15px; font-weight: 800; }
-.play-tag { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+.play-name { font-family: var(--font-arcade); font-size: 11px; letter-spacing: .02em; }   /* CHROME: fixed play NAME label */
+.play-tag { font-family: var(--font-term); font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }   /* FEED: descriptor */
 
 #target-picker { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .target-btn {
@@ -205,9 +210,9 @@ html, body {
 }
 .target-btn:active { transform: scale(0.97); }
 .target-btn.selected { border-color: var(--star); background: #232a36; }
-.t-pos { font-size: 13px; font-weight: 800; }
-.t-route { font-size: 10px; color: #cdd7e3; }
-.t-look { font-size: 9px; color: var(--muted); }
+.t-pos { font-family: var(--font-arcade); font-size: 11px; letter-spacing: .02em; }   /* CHROME: position label */
+.t-route { font-family: var(--font-term); font-size: 13px; color: #cdd7e3; }   /* FEED: route readout */
+.t-look { font-family: var(--font-term); font-size: 12px; color: var(--muted); }   /* FEED: leverage readout */
 /* read verdict — colored inset so a glance at the field/buttons shows the matchup */
 .target-btn.v-good { box-shadow: inset 3px 0 0 var(--good); }
 .target-btn.v-neutral { box-shadow: inset 3px 0 0 var(--neutral); }
@@ -218,29 +223,29 @@ html, body {
 .pop { animation: tf-pop .4s cubic-bezier(.2, .8, .3, 1.2); }
 @media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
 
-#snap-btn, #next-btn, #new-game-btn, #cpu-continue {
+#snap-btn, #next-btn, #new-game-btn, #cpu-continue, #start-btn {
   margin-top: 4px; width: 100%;
   background: var(--los); color: #fff; border: 2px solid rgba(0,0,0,.5); border-radius: 10px;
   padding: 14px; font-family: var(--font-arcade); font-size: 13px; letter-spacing: 0.02em;
   cursor: pointer; box-shadow: 0 6px 0 rgba(0,0,0,.55); transition: transform .06s, box-shadow .06s;
 }
-#snap-btn:active, #next-btn:active, #new-game-btn:active, #cpu-continue:active {
+#snap-btn:active, #next-btn:active, #new-game-btn:active, #cpu-continue:active, #start-btn:active {
   transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.55);
 }
 #snap-btn:disabled { background: #2a323e; color: #6a7687; box-shadow: 0 6px 0 rgba(0,0,0,.4); cursor: default; }
 #next-btn { background: #2f9f4a; }
 
 /* animating */
-#tick-caption { text-align: center; font-size: 16px; font-weight: 700; padding: 28px 0; color: var(--ink); min-height: 80px; }
+#tick-caption { text-align: center; font-family: var(--font-term); font-size: 20px; letter-spacing: .02em; padding: 28px 0; color: var(--ink); min-height: 80px; }   /* FEED: live snap narration */
 
 /* postplay */
-#result-line { text-align: center; font-size: 22px; font-weight: 900; padding: 4px 0 6px; }
+#result-line { text-align: center; font-family: var(--font-arcade); font-size: var(--fs-verdict); text-transform: uppercase; letter-spacing: .03em; padding: 4px 0 6px; }   /* CHROME verdict — 18px keeps 'INTERCEPTED'/'COMPLETION +8' on one line at 375 */
 #result-line.good { color: var(--good); }
 #result-line.bad { color: var(--bad); }
 #result-line.neutral { color: var(--neutral); }
 
 /* drive-ending banner */
-#drive-banner { text-align: center; font-weight: 800; font-size: 14px; letter-spacing: 0.04em; padding: 9px 12px; border-radius: 8px; }
+#drive-banner { text-align: center; font-family: var(--font-term); font-size: 17px; letter-spacing: .02em; padding: 9px 12px; border-radius: 8px; }   /* FEED: generated drive result banner */
 #drive-banner.td { background: rgba(70,196,106,0.16); color: var(--good); border: 1px solid rgba(70,196,106,0.45); }
 #drive-banner.turnover { background: rgba(232,84,62,0.14); color: var(--bad); border: 1px solid rgba(232,84,62,0.45); }
 
@@ -259,19 +264,19 @@ html, body {
 .bd-dot.good { background: var(--good); }
 .bd-dot.neutral { background: var(--neutral); }
 .bd-dot.bad { background: var(--bad); }
-.bd-label { font-size: 13px; font-weight: 700; flex: 1; }
-.bd-value { font-size: 13px; color: var(--muted); font-weight: 600; }
-.bd-detail { font-size: 12px; color: #aeb9c7; margin: 4px 0 0 16px; }
-.bd-math { font-size: 11px; color: #6b7686; margin: 6px 0 0 16px; font-family: ui-monospace, Menlo, monospace; display: none; }
+.bd-label { font-family: var(--font-arcade); font-size: 10px; letter-spacing: .02em; flex: 1; }   /* CHROME row kicker */
+.bd-value { font-family: var(--font-term); font-size: 15px; color: var(--muted); }   /* FEED: generated value */
+.bd-detail { font-family: var(--font-term); font-size: 15px; color: #aeb9c7; margin: 4px 0 0 16px; }   /* FEED: generated detail */
+.bd-math { font-family: var(--font-term); font-size: 14px; color: #6b7686; margin: 6px 0 0 16px; display: none; }   /* FEED (VT323 is a terminal mono — kills the rogue third family, still reads as code) */
 .bd-row.open .bd-math { display: block; }
 
-/* ---------- game over ---------- */
+/* ---------- game over ----------  (font roles folded in from the old ad-hoc block) */
 #gameover { align-items: center; text-align: center; gap: 4px; padding: 18px 0 6px; }
-#go-title { font-size: 12px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
-#go-score { font-size: 64px; font-weight: 900; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
-#go-sub { font-size: 13px; color: var(--muted); }
-#go-grade { font-size: 38px; font-weight: 900; color: var(--star); margin: 6px 0; }
-.go-best { font-size: 14px; font-weight: 700; color: var(--muted); }
+#go-title { font-family: var(--font-arcade); font-size: var(--fs-kicker); letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }   /* CHROME kicker */
+#go-score { font-family: var(--font-arcade); font-size: var(--fs-score); line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }   /* CHROME scoreboard (40, not 64 — fits 375) */
+#go-sub { font-family: var(--font-term); font-size: 16px; color: var(--muted); }   /* FEED */
+#go-grade { font-family: var(--font-arcade); font-size: var(--fs-grade); color: var(--star); margin: 6px 0; }   /* CHROME grade stamp */
+.go-best { font-family: var(--font-term); font-size: 16px; color: var(--muted); }   /* FEED */
 .go-best.new { color: var(--good); }
 #new-game-btn { margin-top: 14px; }
 #go-grade.win { color: var(--good); }
@@ -280,12 +285,12 @@ html, body {
 
 /* ---------- opponent possession ---------- */
 #cpu { align-items: center; text-align: center; gap: 8px; padding: 26px 0 6px; }
-#cpu-title { font-size: 12px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
-#cpu-result { font-size: 30px; font-weight: 900; line-height: 1.1; }
+#cpu-title { font-family: var(--font-arcade); font-size: var(--fs-kicker); letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }   /* CHROME kicker */
+#cpu-result { font-family: var(--font-term); font-size: 30px; line-height: 1.1; }   /* FEED: generated possession result */
 #cpu-result.good { color: var(--good); }
 #cpu-result.neutral { color: var(--neutral); }
 #cpu-result.bad { color: var(--bad); }
-#cpu-tally { font-size: 14px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+#cpu-tally { font-family: var(--font-term); font-size: 16px; color: var(--muted); font-variant-numeric: tabular-nums; }   /* FEED */
 #cpu-continue { margin-top: 14px; }
 
 /* ---------- player card popover ---------- */
@@ -304,29 +309,22 @@ html, body {
 .card-num {
   width: 34px; height: 34px; border-radius: 50%; flex: none;
   display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 14px; color: #fff;
+  font-family: var(--font-arcade); font-size: 11px; color: #fff;   /* CHROME jersey token — matches .tp-badge / .chip / .t-num */
 }
-.card-name { font-size: 17px; font-weight: 800; }
-.card-pos { font-size: 12px; color: var(--muted); }
+.card-name { font-family: var(--font-arcade); font-size: 13px; letter-spacing: .02em; }   /* CHROME: player name */
+.card-pos { font-family: var(--font-arcade); font-size: 9px; letter-spacing: .02em; color: var(--muted); }   /* CHROME: position label */
 .card-stars { color: var(--star); font-size: 14px; letter-spacing: 2px; margin: 6px 0 10px; }
 .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
-.stat { display: flex; justify-content: space-between; font-size: 13px; }
-.stat .k { color: var(--muted); font-weight: 600; }
-.stat .v { font-weight: 800; font-variant-numeric: tabular-nums; }
+.stat { display: flex; justify-content: space-between; }
+.stat .k { font-family: var(--font-term); font-size: 14px; color: var(--muted); }   /* FEED: stat key */
+.stat .v { font-family: var(--font-term); font-size: 16px; font-variant-numeric: tabular-nums; }   /* FEED: stat value (tabular) */
 .v.hi { color: var(--good); }
 .v.mid { color: var(--neutral); }
 .v.lo { color: var(--bad); }
-.card-close { margin-top: 14px; width: 100%; background: #222a35; color: var(--ink); border: none; border-radius: 10px; padding: 11px; font-weight: 700; cursor: pointer; }
+.card-close { margin-top: 14px; width: 100%; background: #222a35; color: var(--ink); border: none; border-radius: 10px; padding: 11px; font-family: var(--font-arcade); font-size: var(--fs-micro); letter-spacing: .02em; cursor: pointer; }   /* CHROME: button label */
 
-/* ---------- arcade typography ---------- */
-/* Press Start 2P (pixel) only on short ASCII display text; VT323 (terminal) on changing numbers/banners */
-#go-score { font-family: var(--font-arcade); font-size: 40px; }
-#go-grade { font-family: var(--font-arcade); font-size: 30px; }
-#drive-banner { font-family: var(--font-term); font-size: 17px; letter-spacing: .02em; }
-#cpu-result { font-family: var(--font-term); }
-#go-sub, #cpu-tally, #go-title, #cpu-title { font-family: var(--font-term); }
-#go-sub, #cpu-tally { font-size: 16px; }
-#result-line { text-transform: uppercase; letter-spacing: .03em; }
+/* (the old ad-hoc "arcade typography" override block was folded into the base rules
+   above + the documented :root TYPE ROLES — every element now sets its font once) */
 
 /* ---------- sound mute chip (top-right over the field) ---------- */
 #mute-btn {
@@ -418,7 +416,7 @@ html, body {
 
 /* ---------- post-play color commentary ---------- */
 #commentary {
-  text-align: center; font-size: 14px; line-height: 1.45;
+  text-align: center; font-family: var(--font-term); font-size: var(--fs-feed); line-height: 1.25;   /* FEED: runtime color-commentary sentence (was the headline system-sans leak) */
   color: var(--ink); padding: 4px 8px 8px; max-width: 42ch; margin: 0 auto;
 }
 #commentary[data-cause="POST_SNAP"] { color: #cfe3ff; }
@@ -452,4 +450,103 @@ html, body {
 }
 @media (prefers-reduced-motion: reduce) {
   #field.reading .chip { transition: none; }   /* routes snap (no smooth motion); the pressure bar still drains as a benign timer */
+}
+
+/* ================= END-OF-GAME SCREEN (broadcast post-game card) =================
+   Appended last so it is authoritative for the #gameover IDs over the older
+   "game over" + "arcade typography" blocks above. CHROME = Press Start 2P
+   (--font-arcade), FEED = VT323 (--font-term). Mobile-first 375; reuses the
+   chip-spike + gold-ring + tf-slam/tf-pop primitives. Stat rows reuse breakdown DNA.
+   NOTE (shared with typography component): the font-role assignments below for
+   #go-title/#go-score/#go-grade/#go-sub are the END-SCREEN's final word; if the
+   typography pass also fonts these, both agree on CHROME/FEED + sizes here. */
+#gameover { align-items: center; text-align: center; gap: 9px; padding: 16px 0 6px; overflow-y: auto; }
+/* CHROME kicker */
+#go-title { font-family: var(--font-arcade); font-size: var(--fs-kicker, 11px); font-weight: normal;
+  letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
+/* CHROME winner headline — the eye magnet, slams in */
+#go-winner { font-family: var(--font-arcade); font-size: 22px; font-weight: normal; line-height: 1.1;
+  letter-spacing: .03em; text-transform: uppercase;
+  text-shadow: 3px 3px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000; }
+#go-winner:empty { display: none; }
+#go-winner.win  { color: var(--good); }
+#go-winner.loss { color: var(--bad); }
+#go-winner.tie  { color: var(--star); }
+/* CHROME scoreboard pair — YOU 21 — 17 CPU (40px, not 64, fits 375) */
+#go-score { font-family: var(--font-arcade); font-size: 40px; font-weight: normal; line-height: 1;
+  color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: .01em;
+  display: flex; align-items: baseline; justify-content: center; gap: 7px; flex-wrap: nowrap; }
+#go-score .go-tag { font-size: 11px; color: var(--muted); letter-spacing: .06em; align-self: center; }
+#go-score .go-dash { color: var(--muted); }
+#go-score .mine { color: var(--star); }
+#go-score .cpu  { color: var(--ink); }
+/* FEED sub line */
+#go-sub { font-family: var(--font-term); font-size: 16px; font-weight: normal; letter-spacing: .02em; color: var(--muted); }
+/* CHROME letter grade in a gold ring (reuses the .chip.primary ring recipe) */
+#go-grade-wrap { width: 70px; height: 70px; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center; margin: 2px 0;
+  background: #0e1218; box-shadow: 0 0 0 3px var(--star), 0 0 12px var(--star); }
+#go-grade { font-family: var(--font-arcade); font-size: 30px; font-weight: normal; color: var(--star); margin: 0; }
+#go-grade.win  { color: var(--good); }
+#go-grade.loss { color: var(--bad); }
+#go-grade.tie  { color: var(--star); }
+/* ---------- top performers ---------- */
+#top-performers { width: 100%; display: flex; flex-direction: column; gap: 1px;
+  background: #222a35; border-radius: 8px; overflow: hidden; }
+.tp-head { font-family: var(--font-arcade); font-size: 11px; letter-spacing: .12em; color: var(--star);
+  text-transform: uppercase; background: var(--panel-2); padding: 8px 10px; }
+.tp-row { display: flex; align-items: center; gap: 9px; background: var(--panel-2); padding: 8px 10px; text-align: left; }
+.tp-badge { width: 24px; height: 24px; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-arcade); font-size: 8px; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.5); }
+.tp-badge.off { background: var(--off); border: 2px solid var(--off-edge); }
+.tp-badge.def { background: var(--def); border: 2px solid var(--def-edge); }
+.tp-badge.spike { animation: chip-spike .9s cubic-bezier(.3, 1.45, .5, 1); }
+.tp-name { font-family: var(--font-arcade); font-size: 9px; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--ink); flex: none; min-width: 54px; }
+.tp-stat { font-family: var(--font-term); font-size: 15px; letter-spacing: .01em; color: var(--muted);
+  margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; }
+.tp-stat.off { color: var(--good); }
+.tp-stat.def { color: var(--bad); }
+.tp-empty { font-family: var(--font-term); font-size: 15px; color: var(--muted);
+  background: var(--panel-2); padding: 9px 10px; text-align: center; }
+/* FEED best line */
+.go-best { font-family: var(--font-term); font-size: 16px; font-weight: normal; letter-spacing: .02em; color: var(--muted); }
+.go-best.new { color: var(--good); }
+#new-game-btn { margin-top: 10px; }
+@media (prefers-reduced-motion: reduce) { .tp-badge.spike { animation: none; } }
+
+/* ========== ARCADE START / ATTRACT SCREEN ========== */
+#start { align-items: center; text-align: center; gap: 14px; padding: 18px 4px 8px; }
+#start-kicker { font-family: var(--font-arcade); font-size: var(--fs-micro); letter-spacing: 0.16em; color: var(--muted); line-height: 1.4; }
+#start-title { font-family: var(--font-arcade); line-height: 1.1; display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 2px 0 4px; }
+#start-title .tf-1, #start-title .tf-2 { font-size: var(--fs-hero); letter-spacing: 0.02em; text-shadow: 3px 3px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000; }
+#start-title .tf-1 { color: var(--ink); }
+#start-title .tf-2 { color: var(--star); border-bottom: 3px solid var(--los); padding-bottom: 4px; }
+#start-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 320px; }
+.mode-opt { position: relative; background: var(--panel-2); color: var(--ink); border: 1.5px solid #2a323e; border-radius: 10px; padding: 12px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: border-color .15s, background .15s, transform .08s; }
+.mode-opt:active { transform: scale(0.97); }
+.mode-opt.selected { border-color: var(--star); background: #232a36; }
+.mode-k { font-family: var(--font-arcade); font-size: 11px; letter-spacing: 0.02em; }
+.mode-s { font-family: var(--font-term); font-size: 13px; color: var(--muted); }
+.mode-opt.locked { opacity: .42; border-color: #2a323e; cursor: default; }
+.mode-opt.locked:active { transform: none; }
+.soon-pill { position: absolute; top: -6px; right: -4px; background: var(--first-down); color: #000; font-family: var(--font-arcade); font-size: 7px; letter-spacing: 0.04em; padding: 2px 4px; border-radius: 4px; }
+.mode-opt.shake { animation: tf-shake .12s linear; }
+@keyframes tf-shake { 0% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } 100% { transform: translateX(0); } }
+/* glow breathe via filter (NOT box-shadow) so the inherited :active squash still works */
+#start-btn { position: relative; max-width: 320px; animation: start-breathe 1.4s ease-in-out infinite alternate; }
+@keyframes start-breathe { from { filter: drop-shadow(0 0 0 transparent); } to { filter: drop-shadow(0 0 7px var(--star)); } }
+#start-foot { font-family: var(--font-term); font-size: 13px; color: var(--muted); letter-spacing: 0.02em; }
+
+/* slam-IN that SETTLES at opacity 1 — the callout's tf-slam fades OUT, which would make persistent text vanish */
+@keyframes tf-slam-in { 0% { opacity: 0; transform: scale(2.2); } 14% { opacity: 1; transform: scale(0.92); } 26% { transform: scale(1.04); } 40% { transform: scale(1); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes tf-slam-in-rm { 0% { opacity: 0; } 100% { opacity: 1; } }
+#start-title .tf-1.slam, #start-title .tf-2.slam, #go-winner.slam { animation: tf-slam-in 1.05s ease-out both; }
+/* long performer names degrade gracefully at 375 instead of overflowing the row */
+.tp-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  #start-btn { animation: none; }
+  .mode-opt.shake { animation: none; }
+  #start-title .tf-1.slam, #start-title .tf-2.slam, #go-winner.slam { animation: tf-slam-in-rm 1s ease both; }
 }

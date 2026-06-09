@@ -101,6 +101,7 @@
   const routesSvg = document.getElementById('routes');
   const ballEl = document.getElementById('ball');
   const panel = {
+    start: document.getElementById('start'),
     presnap: document.getElementById('presnap'),
     animating: document.getElementById('animating'),
     postplay: document.getElementById('postplay'),
@@ -152,6 +153,17 @@
   let cpuScore = 0;
   let bestScore = Number(localStorage.getItem('tf-best') || 0);
   const fastMode = /[?&]fast\b/.test(location.search);
+
+  // ---------- per-player box score (accumulates across all drives of one game) ----------
+  // Receivers track catches/yards/TDs/targets; defense is a single aggregate line.
+  // Hooked at the one choke point advanceDown(); read by the end-of-game TOP PERFORMERS.
+  let playerStats = {}, defStats = {};
+  function resetStats() {
+    playerStats = {};
+    ELIGIBLE.forEach(function (e) { playerStats[e.key] = { catches: 0, yards: 0, tds: 0, targets: 0 }; });
+    defStats = { ints: 0, pbus: 0, sacks: 0 };
+  }
+  resetStats();   // seed before the first play so reads never hit undefined
 
   // ---------- chip rendering ----------
   function buildChips() {
@@ -321,6 +333,32 @@
   function tackle(b) { if (window.Sound) Sound.tackle(b); }
   function crowdOhh(l) { if (window.Sound) Sound.crowdOhh(l); }
   function crowdGasp() { if (window.Sound) Sound.crowdGasp(); }
+
+  // ---------- attract / start screen ----------
+  function startFightSong() {
+    if (!window.Sound) return;
+    Sound.ensureUnlock();
+    fanfare();                                       // immediate synth fanfare (covers a not-yet-decoded band)
+    setTimeout(function () { if (window.Sound) Sound.band(); }, 600);   // the recorded band layers in (self-no-ops if not ready / muted)
+  }
+  function runStartIntro() {
+    setStage('start');
+    score = 0; cpuScore = 0; tdCount = 0; drivesPlayed = 0; down = 1; distance = 10; ballOn = 25; drivePlays = 0;   // clean attract HUD
+    updateHud();
+    resetFormation();
+    const t1 = document.querySelector('#start-title .tf-1'), t2 = document.querySelector('#start-title .tf-2');
+    [t1, t2].forEach(function (el) { if (el) el.classList.remove('slam'); });
+    if (reduceMotion) {
+      if (t1) { void t1.offsetWidth; t1.classList.add('slam'); }
+      if (t2) { void t2.offsetWidth; t2.classList.add('slam'); }
+      return;
+    }
+    ['X', 'Z', 'SLOT', 'TE', 'RB', 'QB'].forEach(function (id, i) {
+      setTimeout(function () { chipFx(id, 'celebrate'); }, i * 60);
+    });
+    if (t1) setTimeout(function () { void t1.offsetWidth; t1.classList.add('slam'); }, 120);
+    if (t2) setTimeout(function () { void t2.offsetWidth; t2.classList.add('slam'); }, 240);
+  }
 
   const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
@@ -1032,13 +1070,22 @@
   function advanceDown(result) {
     drivePlays += 1;
     firstDownThisPlay = false;
-    if (result.outcome === 'interception') { driveOver = true; driveResult = 'int'; updateHud(); return; }
+    if (result.outcome === 'interception') { driveOver = true; driveResult = 'int'; defStats.ints++; updateHud(); return; }
     const gain = result.yards | 0;                 // negative on a sack
     const nb = Math.max(1, ballOn + gain);         // clamp at our own goal line
     distance -= (nb - ballOn); ballOn = nb;        // distance moves by the ACTUAL change, not the clamped-away nominal
     if (ballOn >= 100) { ballOn = 100; score += 7; tdCount += 1; driveOver = true; driveResult = 'td'; }
     else if (gain > 0 && distance <= 0) { down = 1; distance = (100 - ballOn <= 10) ? (100 - ballOn) : 10; firstDownThisPlay = true; }
     else { down += 1; if (down > 4) { driveOver = true; driveResult = 'downs'; } }
+    // box score: credit the targeted receiver (catches/yards/TDs/targets) + defense aggregate.
+    var s = chosenTarget && playerStats[chosenTarget];
+    if (s) {
+      s.targets++;
+      if (result.outcome === 'completion') { s.catches++; s.yards += (result.yards | 0); }
+      if (driveResult === 'td') s.tds++;            // driveResult set just above for the TD on this play
+    }
+    if (result.outcome === 'pbu') defStats.pbus++;
+    else if (result.outcome === 'sack') defStats.sacks++;
     updateHud();
   }
 
@@ -1063,7 +1110,7 @@
     if (name !== 'postplay') rpTeardown();
     Object.keys(panel).forEach(function (k) { panel[k].classList.toggle('hidden', k !== name); });
     if (window.Sound) {
-      if (name === 'gameover') Sound.crowdBedStop();
+      if (name === 'gameover' || name === 'start') Sound.crowdBedStop();
       else {
         Sound.crowdBedStart();
         if (name === 'reading' || name === 'animating') Sound.crowdLevel('play');
@@ -1083,6 +1130,7 @@
   }
   function newGame() {
     score = 0; cpuScore = 0; tdCount = 0; drivesPlayed = 0; gameOver = false;
+    resetStats();                 // fresh box score for the new game (stats persist across all drives)
     startDrive();
   }
   function showCpuPossession() {
@@ -1100,24 +1148,107 @@
     updateHud();
     setStage('cpu');
   }
+  // Letter grade from the final margin + scoring. Real arcade stamp, not WIN/LOSS.
+  function gradeFor(diff, win, tie, tds) {
+    if (win && (diff >= 14 || tds >= 4)) return 'S';
+    if (win && diff >= 7) return 'A';
+    if (win) return 'B';
+    if (tie) return 'C';
+    if (diff >= -7) return 'D';   // loss within a TD
+    return 'F';
+  }
+  // Build the TOP PERFORMERS rows from the box score; returns an array of row objects
+  // (the leading receiver flagged so its badge can spike on reveal). Empty -> shutout guard.
+  function buildTopPerformers() {
+    const rows = [];
+    const recs = ELIGIBLE
+      .map(function (e) { return { key: e.key, st: playerStats[e.key] || { catches: 0, yards: 0, tds: 0, targets: 0 } }; })
+      .filter(function (r) { return r.st.catches > 0; })
+      .sort(function (a, b) { return (b.st.catches - a.st.catches) || (b.st.yards - a.st.yards); });
+    function recStat(st) {
+      var s = st.catches + ' REC · ' + st.yards + ' YDS';
+      if (st.tds > 0) s += ' · ' + st.tds + ' TD';   // arcade caps stay singular (REC/TD/INT/SACK)
+      return s;
+    }
+    function recRow(r, lead) {
+      const e = elgByKey[r.key];
+      return { side: 'off', num: numOf(e.chip), name: (P[r.key] && P[r.key].name) || e.pos, stat: recStat(r.st), lead: !!lead };
+    }
+    if (recs[0]) rows.push(recRow(recs[0], true));     // leading receiver — badge spikes
+    if (recs[1]) rows.push(recRow(recs[1], false));    // #2 receiver
+    // defense line — only if it actually did something
+    if (defStats.ints || defStats.pbus || defStats.sacks) {
+      const parts = [];
+      if (defStats.ints)  parts.push(defStats.ints + ' INT');
+      if (defStats.pbus)  parts.push(defStats.pbus + ' PBU');
+      if (defStats.sacks) parts.push(defStats.sacks + ' SACK');
+      rows.push({ side: 'def', num: 54, name: 'DEFENSE', stat: parts.join(' · '), lead: false });
+    }
+    return rows;
+  }
+  function renderTopPerformers() {
+    const wrap = document.getElementById('top-performers');
+    if (!wrap) return;
+    const rows = buildTopPerformers();
+    let html = '<div class="tp-head">★ TOP PERFORMERS ★</div>';
+    if (!rows.length) {
+      html += '<div class="tp-empty">No completions — tough day at the office</div>';   // shutout guard
+    } else {
+      rows.forEach(function (r) {
+        html += '<div class="tp-row">' +
+          '<span class="tp-badge ' + r.side + (r.lead ? ' lead' : '') + '">' + r.num + '</span>' +
+          '<span class="tp-name">' + r.name + '</span>' +
+          '<span class="tp-stat ' + r.side + '">' + r.stat + '</span></div>';
+      });
+    }
+    wrap.innerHTML = html;
+    wrap.classList.remove('hidden');
+    // POG flourish: the leading receiver's badge does the same leap a scorer does on a TD.
+    const leadBadge = wrap.querySelector('.tp-badge.lead');
+    if (leadBadge) { void leadBadge.offsetWidth; leadBadge.classList.add('spike'); }
+  }
+
   function showGameOver() {
     gameOver = true;
     const isBest = score > bestScore;
     if (isBest) { bestScore = score; try { localStorage.setItem('tf-best', String(score)); } catch (e) {} }
-    const result = score > cpuScore ? 'WIN' : score < cpuScore ? 'LOSS' : 'TIE';
-    document.getElementById('go-score').textContent = score + '-' +cpuScore;
+    const win = score > cpuScore, tie = score === cpuScore;
+    const result = win ? 'WIN' : tie ? 'TIE' : 'LOSS';
+    const cls = win ? 'win' : tie ? 'tie' : 'loss';
+    const diff = score - cpuScore;
+
+    // winner headline (slams in)
+    const winner = document.getElementById('go-winner');
+    if (winner) {
+      winner.textContent = win ? 'YOU WIN!' : tie ? 'TIE GAME' : 'YOU LOSE';
+      winner.className = cls;
+      if (!reduceMotion) { winner.classList.remove('slam'); void winner.offsetWidth; }
+      winner.classList.add('slam');
+    }
+    // scoreboard pair: YOU 21 — 17 CPU (your number gold, CPU white)
+    document.getElementById('go-score').innerHTML =
+      '<span class="go-tag">YOU</span><span class="mine">' + score + '</span>' +
+      '<span class="go-dash">—</span>' +
+      '<span class="cpu">' + cpuScore + '</span><span class="go-tag">CPU</span>';
+    // letter grade in the gold ring
     const g = document.getElementById('go-grade');
-    g.textContent = result;
-    g.className = result === 'WIN' ? 'win' : result === 'LOSS' ? 'loss' : 'tie';
+    g.textContent = gradeFor(diff, win, tie, tdCount);
+    g.className = cls;
+    // sub line
     document.getElementById('go-sub').textContent =
-      'You vs Opponent · ' + tdCount + (tdCount === 1 ? ' TD' : ' TDs') + ' in ' + DRIVES_PER_GAME + ' drives';
+      score + ' PTS · ' + tdCount + (tdCount === 1 ? ' TD' : ' TDS') + ' IN ' + DRIVES_PER_GAME + ' DRIVES';
+    // top performers (real box score)
+    renderTopPerformers();
+    // best
     const best = document.getElementById('go-best');
-    best.textContent = isBest ? ('New best!  ' + score + ' pts') : ('Best  ' + bestScore + ' pts');
+    best.textContent = isBest ? ('NEW BEST!  ' + score + ' PTS') : ('BEST  ' + bestScore + ' PTS');
     best.className = isBest ? 'go-best new' : 'go-best';
+
     popIn(g);
-    buzz(result === 'WIN' ? [60, 40, 60, 40, 90] : result === 'LOSS' ? [120] : [40]);
-    sfx(result === 'WIN' ? 'win' : 'loss');
-    if (result === 'WIN') { announce('win'); addTrauma(0.75); }
+    buzz(win ? [60, 40, 60, 40, 90] : tie ? [40] : [120]);
+    sfx(win ? 'win' : 'loss');
+    if (win) { announce('win'); addTrauma(0.75); }
+    if (isBest) { burstAt('big', 26.6, 10); ding(); }   // new-best fanfare
     setStage('gameover');
   }
 
@@ -1305,7 +1436,19 @@
     if (drivesPlayed >= DRIVES_PER_GAME) showGameOver();
     else startDrive();
   });
-  newGameBtn.addEventListener('click', function () { sfx('ui'); newGame(); });
+  newGameBtn.addEventListener('click', function () { sfx('ui'); runStartIntro(); });
+  const startBtn = document.getElementById('start-btn');
+  if (startBtn) startBtn.addEventListener('click', function () {
+    if (window.Sound) Sound.ensureUnlock();
+    startFightSong(); sfx('ui'); newGame();
+  });
+  document.querySelectorAll('.mode-opt').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (this.classList.contains('locked')) { this.classList.remove('shake'); void this.offsetWidth; this.classList.add('shake'); sfx('ui'); return; }   // 2P: telegraph 'locked', not 'broken'
+      document.querySelectorAll('.mode-opt').forEach(function (x) { x.classList.toggle('selected', x === b); });
+      sfx('ui');
+    });
+  });
 
   // instant replay controls
   if (rpPlayBtn) rpPlayBtn.addEventListener('click', function () { sfx('ui'); rpPlay(); });
@@ -1331,5 +1474,6 @@
   // ---------- boot ----------
   buildChips();
   fxResize();
-  startDrive();
+  if (window.Sound && Sound.preload) Sound.preload();   // decode the recorded clips early so the band fight-song is ready on first START
+  runStartIntro();
 })();

@@ -99,6 +99,7 @@ It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) a
 - [x] 16-bit FM sound engine — a Web Audio FM/subtractive synth (FM operators, detuned unison, filter envelopes, convolver reverb) re-voicing every event for a Genesis/SNES feel
 - [x] Organic football SFX — formant-synthesized QB grunts, a leather-on-pads catch, body-thud tackles, and crowd "Ohhh"/gasp reactions (from a procedural-audio research sprint)
 - [x] Ambient crowd bed — two recorded crowd loops layered as a continuous low stadium hum (a procedural noise murmur and a procedural music bed were both tried and cut — one droned like a jet engine, the other read as ominous sci-fi)
+- [x] Arcade shell — a unified two-font type system (pixel **chrome** for fixed labels/scores vs terminal **feed** for runtime prose/numbers), an attract/**START** screen (1-player vs a dimmed 2-player, a band fight-song), and a broadcast **end-game card** (winner headline, score, a letter grade, and **top performers** off a live per-player box score)
 - [x] Read legibility (colored verdicts) + outcome juice (pop + haptics)
 - [x] Post-snap reads — find the open man by his separation in a timed read window (no spoiler colors)
 - [x] Pre-snap tells & bluffs — press/off corners + a creeping LB hint the coverage and bluff ~1 in 4
