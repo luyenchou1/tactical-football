@@ -106,7 +106,75 @@
     }
   }
 
-  const P = Sim.DEFAULT_PLAYERS;
+  // Working roster — a deep clone so user tuning never mutates the engine's pristine
+  // Sim.DEFAULT_PLAYERS (which doubles as the BASE for deltas, caps, and resets).
+  const P = JSON.parse(JSON.stringify(Sim.DEFAULT_PLAYERS));
+
+  // ---------- roster tuning (bonus pool) ----------
+  // Only attributes the engine actually READS are tunable — no fake knobs. Each gets a
+  // teaching caption in the roster UI. Deltas are add-only on top of base, cap 99.
+  const TUNABLE = {
+    qb:   ['ACC', 'DEC', 'MOB'],
+    x:    ['SPD', 'RTE', 'CTH', 'BTK'],
+    z:    ['SPD', 'RTE', 'CTH', 'BTK'],
+    slot: ['SPD', 'RTE', 'CTH', 'BTK'],
+    te:   ['SPD', 'RTE', 'CTH', 'BTK'],
+    rb:   ['SPD', 'RTE', 'CTH', 'BTK'],
+  };
+  const ATTR_INFO = {
+    SPD: 'separation + run after the catch',
+    RTE: 'route running — beats coverage',
+    CTH: 'catch in traffic',
+    BTK: 'breaks tackles for extra yards',
+    ACC: 'throw quality and placement',
+    DEC: 'checks down instead of forcing it',
+    MOB: 'escapes the rush on slow routes',
+  };
+  const ROSTER_POOL = 15;
+  const ROSTER_KEY = 'tf-roster-v1';
+  let rosterDeltas = {};   // { slot: { SPD: 2 }, qb: { ACC: 3 } } — positive ints only
+
+  function spentPoints() {
+    let s = 0;
+    Object.keys(rosterDeltas).forEach(function (k) {
+      Object.keys(rosterDeltas[k]).forEach(function (a) { s += rosterDeltas[k][a]; });
+    });
+    return s;
+  }
+  function loadRoster() {
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(ROSTER_KEY) || 'null'); } catch (e) { raw = null; }
+    if (!raw || typeof raw !== 'object') { rosterDeltas = {}; return; }
+    const clean = {};
+    Object.keys(TUNABLE).forEach(function (k) {
+      if (!raw[k] || typeof raw[k] !== 'object') return;
+      TUNABLE[k].forEach(function (a) {
+        const base = Sim.DEFAULT_PLAYERS[k].r[a];
+        const d = Math.floor(Number(raw[k][a]) || 0);
+        const v = Math.max(0, Math.min(99 - base, d));
+        if (v > 0) { (clean[k] = clean[k] || {})[a] = v; }
+      });
+    });
+    rosterDeltas = clean;
+    if (spentPoints() > ROSTER_POOL) rosterDeltas = {};   // over-pool blob = corrupt; discard whole
+  }
+  function applyRoster() {
+    // ASSIGN base+delta (never +=) so re-applying is idempotent
+    Object.keys(TUNABLE).forEach(function (k) {
+      TUNABLE[k].forEach(function (a) {
+        P[k].r[a] = Sim.DEFAULT_PLAYERS[k].r[a] + ((rosterDeltas[k] || {})[a] || 0);
+      });
+    });
+  }
+  function saveRoster() {
+    const out = {};
+    Object.keys(rosterDeltas).forEach(function (k) {
+      Object.keys(rosterDeltas[k]).forEach(function (a) {
+        if (rosterDeltas[k][a] > 0) { (out[k] = out[k] || {})[a] = rosterDeltas[k][a]; }
+      });
+    });
+    try { localStorage.setItem(ROSTER_KEY, JSON.stringify(out)); } catch (e) {}
+  }
 
   // ---------- DOM refs ----------
   const fieldEl = document.getElementById('field');
@@ -114,6 +182,7 @@
   const ballEl = document.getElementById('ball');
   const panel = {
     start: document.getElementById('start'),
+    roster: document.getElementById('roster'),
     presnap: document.getElementById('presnap'),
     animating: document.getElementById('animating'),
     postplay: document.getElementById('postplay'),
@@ -296,22 +365,55 @@
     const n = avg >= 90 ? 5 : avg >= 80 ? 4 : avg >= 70 ? 3 : avg >= 60 ? 2 : 1;
     return '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n);
   }
+  // one source for the card AND the roster header so the star ratings can never drift
+  function avgRating(ratings) {
+    const keys = Object.keys(ratings).filter(function (k) { return k !== 'STA'; });
+    return Math.round(keys.reduce(function (a, k) { return a + ratings[k]; }, 0) / keys.length);
+  }
+  // live game-stat line for the profile card; '' when the player hasn't been involved yet
+  function cardStatLine(simKey) {
+    if (simKey === 'qb') {
+      let cmp = 0, att = 0, yds = 0, td = 0;
+      ELIGIBLE.forEach(function (e) {
+        const st = playerStats[e.key]; if (!st) return;
+        cmp += st.catches; att += st.targets; yds += st.yards; td += st.tds;
+      });
+      att += defStats.ints;   // the INT branch early-returns before targets++, so picks must be added back
+      if (!att && !defStats.sacks) return '';
+      let s = cmp + '/' + att + ' · ' + yds + ' YDS';
+      if (td) s += ' · ' + td + ' TD';
+      if (defStats.ints) s += ' · ' + defStats.ints + ' INT';
+      if (defStats.sacks) s += ' · ' + defStats.sacks + ' SACKED';
+      return s;
+    }
+    const st = playerStats[simKey];
+    if (!st || !st.targets) return '';
+    let s = st.catches + ' REC · ' + st.yards + ' YDS';
+    if (st.tds) s += ' · ' + st.tds + ' TD';
+    s += ' · ' + st.targets + ' TGT';
+    return s;
+  }
   function showCard(p) {
     const sim = p.simKey ? P[p.simKey] : null;
     const name = sim ? sim.name : p.id.replace('_', ' ');
     const ratings = sim ? sim.r : genericRatings(p);
     const keys = Object.keys(ratings).filter(function (k) { return k !== 'STA'; });
-    const avg = Math.round(keys.reduce(function (a, k) { return a + ratings[k]; }, 0) / keys.length);
+    const avg = avgRating(ratings);
     const color = p.team === 'off' ? 'var(--off)' : 'var(--def)';
+    const base = sim && Sim.DEFAULT_PLAYERS[p.simKey] ? Sim.DEFAULT_PLAYERS[p.simKey].r : null;
     let grid = '';
     keys.forEach(function (k) {
+      const d = base ? ratings[k] - base[k] : 0;   // user tuning shows as a gold badge
       grid += '<div class="stat"><span class="k">' + k + '</span>' +
-              '<span class="v ' + ratingClass(ratings[k]) + '">' + ratings[k] + '</span></div>';
+              '<span class="v ' + ratingClass(ratings[k]) + '">' + ratings[k] +
+              (d > 0 ? '<i class="rdelta">+' + d + '</i>' : '') + '</span></div>';
     });
+    const statLine = sim ? cardStatLine(p.simKey) : '';
     cardEl.innerHTML =
       '<div class="card-top"><div class="card-num" style="background:' + color + '">' + p.num + '</div>' +
       '<div><div class="card-name">' + name + '</div><div class="card-pos">' + posName(p) + '</div></div></div>' +
       '<div class="card-stars">' + starStr(avg) + '</div>' +
+      (statLine ? '<div class="card-line">' + statLine + '</div>' : '') +
       '<div class="card-grid">' + grid + '</div>' +
       '<button class="card-close">Close</button>';
     cardEl.querySelector('.card-close').addEventListener('click', hideCard);
@@ -1122,7 +1224,7 @@
     if (name !== 'postplay') rpTeardown();
     Object.keys(panel).forEach(function (k) { panel[k].classList.toggle('hidden', k !== name); });
     if (window.Sound) {
-      if (name === 'gameover' || name === 'start') Sound.crowdBedStop();
+      if (name === 'gameover' || name === 'start' || name === 'roster') Sound.crowdBedStop();   // menu screens stay quiet
       else {
         Sound.crowdBedStart();
         if (name === 'reading' || name === 'animating') Sound.crowdLevel('play');
@@ -1462,6 +1564,70 @@
     });
   });
 
+  // ---------- roster / tune-your-squad ----------
+  const ROSTER_ORDER = ['qb', 'x', 'z', 'slot', 'te', 'rb'];
+  const CHIP_OF = { qb: 'QB', x: 'X', z: 'Z', slot: 'SLOT', te: 'TE', rb: 'RB' };
+  let rosterTab = 'qb';
+  function renderRoster() {
+    const left = ROSTER_POOL - spentPoints();
+    document.getElementById('roster-pool').innerHTML = '<b>' + left + '</b> PTS LEFT';
+    let tabs = '';
+    ROSTER_ORDER.forEach(function (k) {
+      tabs += '<button class="rtab' + (k === rosterTab ? ' sel' : '') + '" data-rk="' + k + '" type="button">' + P[k].num + '</button>';
+    });
+    document.getElementById('roster-tabs').innerHTML = tabs;
+    const pl = P[rosterTab];
+    document.getElementById('roster-player').innerHTML =
+      '<div><div class="ros-name">' + pl.name + '</div>' +
+      '<div class="ros-pos">' + pl.pos + ' · <span class="stars">' + starStr(avgRating(pl.r)) + '</span></div></div>' +
+      '<button class="ghost-btn" id="roster-reset" type="button">Reset</button>';
+    let rows = '';
+    TUNABLE[rosterTab].forEach(function (a) {
+      const base = Sim.DEFAULT_PLAYERS[rosterTab].r[a];
+      const d = (rosterDeltas[rosterTab] || {})[a] || 0;
+      const v = base + d;
+      const canUp = v < 99 && left > 0, canDn = d > 0;
+      rows += '<div class="rrow">' +
+        '<div class="rl"><div class="rk">' + a + '</div><div class="rc">' + ATTR_INFO[a] + '</div></div>' +
+        '<button class="rstep" data-rk="' + rosterTab + '" data-attr="' + a + '" data-dir="-1" type="button" aria-label="Lower ' + a + '"' + (canDn ? '' : ' disabled') + '>−</button>' +
+        '<span class="rval ' + ratingClass(v) + '">' + v + (d > 0 ? '<i class="rdelta">+' + d + '</i>' : '') + '</span>' +
+        '<button class="rstep" data-rk="' + rosterTab + '" data-attr="' + a + '" data-dir="1" type="button" aria-label="Raise ' + a + '"' + (canUp ? '' : ' disabled') + '>+</button></div>';
+    });
+    document.getElementById('roster-rows').innerHTML = rows;
+  }
+  const rosterEl = document.getElementById('roster');
+  if (rosterEl) rosterEl.addEventListener('click', function (e) {
+    const tab = e.target.closest('.rtab');
+    if (tab) {
+      rosterTab = tab.dataset.rk; sfx('ui');
+      chipFx(CHIP_OF[rosterTab], 'celebrate');   // the field chip hops so you see who you're tuning
+      renderRoster(); return;
+    }
+    const step = e.target.closest('.rstep');
+    if (step) {
+      const k = step.dataset.rk, a = step.dataset.attr, dir = Number(step.dataset.dir);
+      const base = Sim.DEFAULT_PLAYERS[k].r[a];
+      const cur = (rosterDeltas[k] || {})[a] || 0;
+      const left = ROSTER_POOL - spentPoints();
+      if (dir > 0 && (left <= 0 || base + cur >= 99)) return;
+      const next = Math.max(0, cur + dir);
+      if (next === 0) {
+        if (rosterDeltas[k]) { delete rosterDeltas[k][a]; if (!Object.keys(rosterDeltas[k]).length) delete rosterDeltas[k]; }
+      } else {
+        (rosterDeltas[k] = rosterDeltas[k] || {})[a] = next;
+      }
+      applyRoster(); saveRoster(); sfx('ui'); renderRoster(); return;
+    }
+    if (e.target.id === 'roster-reset') {
+      delete rosterDeltas[rosterTab];
+      applyRoster(); saveRoster(); sfx('ui'); renderRoster();
+    }
+  });
+  const rosterBtn = document.getElementById('roster-btn');
+  if (rosterBtn) rosterBtn.addEventListener('click', function () { sfx('ui'); renderRoster(); setStage('roster'); });
+  const rosterDone = document.getElementById('roster-done');
+  if (rosterDone) rosterDone.addEventListener('click', function () { sfx('ui'); setStage('start'); });   // bare return — no title re-slam
+
   // instant replay controls
   if (rpPlayBtn) rpPlayBtn.addEventListener('click', function () { sfx('ui'); rpPlay(); });
   const rpBackBtn = document.getElementById('rp-back'); if (rpBackBtn) rpBackBtn.addEventListener('click', function () { rpStep(-1); });
@@ -1486,6 +1652,7 @@
   // ---------- boot ----------
   buildChips();
   fxResize();
+  loadRoster(); applyRoster();   // user attribute tuning (bonus pool) onto the working roster
   if (window.Sound && Sound.preload) Sound.preload();   // decode the recorded clips early so the band fight-song is ready on first START
   runStartIntro();
 })();

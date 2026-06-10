@@ -223,13 +223,13 @@ html, body {
 .pop { animation: tf-pop .4s cubic-bezier(.2, .8, .3, 1.2); }
 @media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
 
-#snap-btn, #next-btn, #new-game-btn, #cpu-continue, #start-btn {
+#snap-btn, #next-btn, #new-game-btn, #cpu-continue, #start-btn, #roster-done {
   margin-top: 4px; width: 100%;
   background: var(--los); color: #fff; border: 2px solid rgba(0,0,0,.5); border-radius: 10px;
   padding: 14px; font-family: var(--font-arcade); font-size: 13px; letter-spacing: 0.02em;
   cursor: pointer; box-shadow: 0 6px 0 rgba(0,0,0,.55); transition: transform .06s, box-shadow .06s;
 }
-#snap-btn:active, #next-btn:active, #new-game-btn:active, #cpu-continue:active, #start-btn:active {
+#snap-btn:active, #next-btn:active, #new-game-btn:active, #cpu-continue:active, #start-btn:active, #roster-done:active {
   transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.55);
 }
 #snap-btn:disabled { background: #2a323e; color: #6a7687; box-shadow: 0 6px 0 rgba(0,0,0,.4); cursor: default; }
@@ -550,3 +550,62 @@ html, body {
   .mode-opt.shake { animation: none; }
   #start-title .tf-1.slam, #start-title .tf-2.slam, #go-winner.slam { animation: tf-slam-in-rm 1s ease both; }
 }
+
+/* ========== ROSTER / TUNE YOUR SQUAD ========== */
+/* The roster-btn on the start screen: an upsized ghost-btn (an enabled action — NOT the
+   locked .mode-opt look), sized into the same 320px column as START. */
+#roster-btn { width: 100%; max-width: 320px; padding: 11px; font-size: 10px; border-radius: 10px; }
+#roster { align-items: center; gap: 10px; padding: 12px 2px 8px; overflow-y: auto; }   /* scrolls on short (SE) viewports, fits 812 */
+#roster-head { display: flex; justify-content: space-between; align-items: baseline; width: 100%; max-width: 340px; }
+#roster-title { font-family: var(--font-arcade); font-size: var(--fs-kicker); letter-spacing: .08em; color: var(--muted); }
+#roster-pool { font-family: var(--font-arcade); font-size: 9px; letter-spacing: .04em; color: var(--muted); }
+#roster-pool b { font-family: var(--font-term); font-size: 19px; font-weight: normal; color: var(--star); font-variant-numeric: tabular-nums; }
+#roster-tabs { display: flex; gap: 8px; justify-content: center; }
+.rtab {
+  width: 42px; height: 42px; border-radius: 50%; flex: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-arcade); font-size: 11px; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.5);
+  background: var(--off); border: 2px solid var(--off-edge);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.35), 0 2px 0 rgba(0,0,0,.4);
+  touch-action: manipulation;
+}
+.rtab.sel { box-shadow: 0 0 0 3px var(--star), 0 0 10px var(--star), 0 2px 0 rgba(0,0,0,.4); }
+#roster-player { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 340px; }
+.ros-name { font-family: var(--font-arcade); font-size: 13px; letter-spacing: .02em; }
+.ros-pos { font-family: var(--font-term); font-size: 14px; color: var(--muted); }
+.ros-pos .stars { color: var(--star); letter-spacing: 2px; }
+#roster-reset { flex: none; }
+.rrow {
+  display: flex; align-items: center; gap: 9px; width: 100%; max-width: 340px;
+  background: var(--panel-2); border: 1px solid #283142; border-radius: 10px; padding: 7px 9px;
+}
+.rrow .rl { flex: 1; min-width: 0; }
+.rrow .rk { font-family: var(--font-arcade); font-size: 10px; letter-spacing: .02em; }
+.rrow .rc { font-family: var(--font-term); font-size: 13px; color: var(--muted); line-height: 1.15; }
+.rstep {
+  width: 44px; height: 44px; flex: none; border-radius: 10px; cursor: pointer;
+  background: #222a35; color: var(--ink); border: 1px solid #2a323e;
+  font-family: var(--font-arcade); font-size: 14px; line-height: 1;
+  box-shadow: 0 2px 0 rgba(0,0,0,.4); touch-action: manipulation;
+}
+.rstep:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,.4); }
+.rstep:disabled { opacity: .3; cursor: default; }
+.rstep:disabled:active { transform: none; }
+.rval {
+  position: relative; flex: none; min-width: 34px; text-align: center;
+  font-family: var(--font-term); font-size: 22px; font-variant-numeric: tabular-nums;
+}
+.rval .rdelta {
+  position: absolute; top: -7px; right: -10px; font-style: normal;
+  font-family: var(--font-arcade); font-size: 7px; letter-spacing: .02em;
+  background: var(--star); color: #000; padding: 2px 3px; border-radius: 4px;   /* gold = earned (green-on-green vanishes) */
+}
+#roster-done { margin-top: 2px; }
+
+/* profile-card additions: the live box-score line + inline tuning badges */
+.card-line {
+  font-family: var(--font-term); font-size: 15px; letter-spacing: .01em;
+  color: var(--good); font-variant-numeric: tabular-nums; margin: -4px 0 8px;
+}
+.stat .v { position: relative; }
+.stat .v .rdelta { position: static; display: inline-block; margin-left: 4px; vertical-align: 2px; }
