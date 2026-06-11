@@ -37,6 +37,20 @@
     ss:   { skin: 2, brow: 1, jaw: 3, eb: 1, stripe: 0 },             // B. Cole — downhill scowl
     mlb:  { skin: 1, brow: 1, jaw: 2, eb: 1, stripe: 2 },             // F. Boone — the bearded enforcer
     fs:   { skin: 0, brow: 2, jaw: 0, eb: 0, stripe: 1 },             // D. Park — eyes everywhere
+    // ---- the rival offense (red shells) ----
+    oppQb:   { skin: 2, brow: 1, jaw: 0, eb: 0, stripe: 2 },          // K. Mercer — the rival gunslinger
+    oppX:    { skin: 4, brow: 0, jaw: 0, eb: 0, stripe: 1, visor: 1 },// J. Okafor — 94 speed behind a mirror
+    oppZ:    { skin: 1, brow: 0, jaw: 3, eb: 0, stripe: 0 },          // L. Briggs
+    oppSlot: { skin: 0, brow: 2, jaw: 0, eb: 1, stripe: 0 },          // S. Tanaka — route-running surgeon
+    oppTe:   { skin: 1, brow: 0, jaw: 2, eb: 0, stripe: 0 },          // R. Walsh — another bearded TE (it's a union)
+    oppRb:   { skin: 4, brow: 1, jaw: 0, eb: 1, stripe: 1 },          // E. Dube — downhill
+    // ---- your defense (blue shells) ----
+    myCbX:   { skin: 3, brow: 0, jaw: 0, eb: 1, stripe: 1 },          // K. Vaughn — your shutdown corner
+    myCbZ:   { skin: 2, brow: 0, jaw: 1, eb: 0, stripe: 0 },          // T. Mason
+    myNb:    { skin: 4, brow: 2, jaw: 0, eb: 0, stripe: 0 },          // D. Osei
+    mySs:    { skin: 1, brow: 1, jaw: 3, eb: 1, stripe: 0 },          // C. Webb — the downhill hammer
+    myMlb:   { skin: 0, brow: 1, jaw: 2, eb: 0, stripe: 2 },          // J. Kowalski — your bearded enforcer
+    myFs:    { skin: 2, brow: 2, jaw: 0, eb: 0, stripe: 1 },          // N. Quinn — the eraser
   };
   var GENERIC = { skin: 2, brow: 0, jaw: 0, eb: 0, stripe: 0 };       // linemen / unknown keys
 

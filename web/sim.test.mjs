@@ -53,12 +53,13 @@ function avgYards(opts, N) {
 }
 const BASE = { receiver: P.slot, defender: P.nb, lb: P.mlb, qb: P.qb };
 
-test('invariants: every route × coverage × leverage is well-formed', () => {
+test('invariants: every route × coverage × leverage × jump is well-formed', () => {
   for (const route of Object.keys(Sim.ROUTES))
     for (const coverage of ['man', 'zone', 'blitz'])
       for (const leverage of ['inside', 'outside'])
-        for (let i = 0; i < 150; i++) {
-          const r = Sim.resolvePlay({ route, coverage, leverage, receiver: P.slot, defender: P.nb, lb: P.mlb, qb: P.qb });
+        for (const jump of [null, 'target', 'other'])
+        for (let i = 0; i < 50; i++) {
+          const r = Sim.resolvePlay({ route, coverage, leverage, jump, receiver: P.slot, defender: P.nb, lb: P.mlb, qb: P.qb });
           assert.ok(OUTCOMES.includes(r.outcome), `bad outcome "${r.outcome}" for ${route}/${coverage}/${leverage}`);
           if (r.outcome === 'completion') assert.ok(r.yards >= 0, 'completion yards >= 0');
           else if (r.outcome === 'interception' || r.outcome === 'sack') assert.ok(r.yards <= 0, `${r.outcome} yards <= 0`);
@@ -114,4 +115,28 @@ test('calibration: screen is a bet on the blitz (big vs blitz, wasted down vs ma
   assert.ok(manCmp >= 54 && manCmp <= 62, `screen/man cmp ${manCmp.toFixed(1)}% out of [54, 62]`);
   assert.ok(blitzYpa > manYpa + 4, `screen blitz YPA ${blitzYpa.toFixed(1)} must exceed man YPA ${manYpa.toFixed(1)} by 4+`);
   assert.equal(blitzBad, 0, 'screen is sack-proof and INT-proof vs the blitz');
+});
+
+// Jump-the-route (coach-the-defense) — a deliberate balance addition. The defense may jump
+// one route: jumped the thrown route → big INT/PBU upside; jumped a different one → the
+// actual target runs free. jump:null must stay bit-identical (the bands above are that proof).
+test('calibration: jumping a route is high-risk/high-reward and self-punishing', () => {
+  const N = 6000;
+  const S = { ...BASE, route: 'slant', coverage: 'man', leverage: 'outside' };
+  const nullInt = ratePct(S, 'interception', N);
+  const nullCmp = cmpPct(S, N);
+  const nullYds = avgYards(S, N);
+  const jtInt = ratePct({ ...S, jump: 'target' }, 'interception', N);
+  const joCmp = cmpPct({ ...S, jump: 'other' }, N);
+  const joYds = avgYards({ ...S, jump: 'other' }, N);
+  assert.ok(jtInt >= 13 && jtInt <= 22, `jumped-target slant INT ${jtInt.toFixed(1)}% out of [13, 22]`);
+  assert.ok(jtInt >= nullInt * 10, `jumped-target INT ${jtInt.toFixed(1)}% must be ≥10× baseline ${nullInt.toFixed(2)}%`);
+  assert.ok(joCmp >= nullCmp + 6, `jumped-wrong cmp ${joCmp.toFixed(1)}% must exceed baseline ${nullCmp.toFixed(1)}% by 6+pp`);
+  assert.ok(joYds >= nullYds + 2, `jumped-wrong yards ${joYds.toFixed(1)} must exceed baseline ${nullYds.toFixed(1)} by 2+`);
+  // a jumped screen gets blown up but stays turnover-proof
+  const SC = { ...BASE, route: 'screen', receiver: P.rb, coverage: 'blitz', leverage: 'outside', jump: 'target' };
+  const scCmp = cmpPct(SC, N);
+  const scBad = ratePct(SC, 'interception', N) + ratePct(SC, 'sack', N);
+  assert.ok(scCmp >= 52 && scCmp <= 62, `jumped screen cmp ${scCmp.toFixed(1)}% out of [52, 62]`);
+  assert.equal(scBad, 0, 'a jumped screen still cannot be sacked or picked');
 });

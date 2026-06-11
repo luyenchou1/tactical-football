@@ -103,23 +103,52 @@
     ss:   { name: 'B. Cole',  num: 32, pos: 'SS', r: { SPD: 80, COV: 74, ZON: 80, BSU: 76, AWR: 82, TKL: 84, STA: 82 } },
     mlb:  { name: 'F. Boone', num: 54, pos: 'MLB',r: { COV: 76, ZON: 80, AWR: 82, TKL: 84, SPD: 80, BSU: 74, STA: 85 } },
     fs:   { name: 'D. Park',  num: 31, pos: 'FS', r: { SPD: 82, ZON: 80, BSU: 80, AWR: 82, TKL: 80, STA: 80 } },
+    // ---- the RIVAL's offense (red — attacks on CPU possessions; the user coaches the defense) ----
+    // Calibrated so this offense vs a random defense ≈ 4.0 pts/possession (the old dice EV).
+    oppQb:   { name: 'K. Mercer', num: 7,  pos: 'QB', r: { ACC: 91, DEC: 89, ARM: 90, MOB: 74, AWR: 87, STA: 85 } },
+    oppX:    { name: 'J. Okafor', num: 81, pos: 'WR', r: { SPD: 94, RTE: 89, CTH: 87, AWR: 84, BTK: 79, STA: 80 } },
+    oppZ:    { name: 'L. Briggs', num: 19, pos: 'WR', r: { SPD: 88, RTE: 83, CTH: 84, AWR: 78, BTK: 77, STA: 80 } },
+    oppSlot: { name: 'S. Tanaka', num: 13, pos: 'WR', r: { SPD: 91, RTE: 90, CTH: 88, AWR: 86, BTK: 76, STA: 80 } },
+    oppTe:   { name: 'R. Walsh',  num: 88, pos: 'TE', r: { SPD: 77, RTE: 79, CTH: 88, AWR: 82, BTK: 85, STA: 82 } },
+    oppRb:   { name: 'E. Dube',   num: 22, pos: 'RB', r: { SPD: 90, RTE: 73, CTH: 81, AWR: 76, BTK: 87, STA: 84 } },
+    // ---- YOUR defense (blue — takes the field on CPU possessions) ----
+    myCbX:   { name: 'K. Vaughn',   num: 23, pos: 'CB', r: { SPD: 88, COV: 82, ZON: 74, BSU: 80, AWR: 78, TKL: 70, STA: 80 } },
+    myCbZ:   { name: 'T. Mason',    num: 26, pos: 'CB', r: { SPD: 82, COV: 76, ZON: 73, BSU: 73, AWR: 74, TKL: 73, STA: 80 } },
+    myNb:    { name: 'D. Osei',     num: 29, pos: 'NB', r: { SPD: 84, COV: 78, ZON: 73, BSU: 75, AWR: 75, TKL: 71, STA: 80 } },
+    mySs:    { name: 'C. Webb',     num: 38, pos: 'SS', r: { SPD: 80, COV: 72, ZON: 77, BSU: 74, AWR: 80, TKL: 84, STA: 82 } },
+    myMlb:   { name: 'J. Kowalski', num: 52, pos: 'MLB',r: { COV: 74, ZON: 79, AWR: 81, TKL: 85, SPD: 78, BSU: 72, STA: 85 } },
+    myFs:    { name: 'N. Quinn',    num: 30, pos: 'FS', r: { SPD: 84, ZON: 82, BSU: 78, AWR: 83, TKL: 78, STA: 80 } },
   };
 
   // ---------- main resolver ----------
-  // resolvePlay({ route, coverage, leverage, receiver, defender, lb, qb })
+  // resolvePlay({ route, coverage, leverage, receiver, defender, lb, qb, jump })
   //   coverage ∈ 'man' | 'zone' | 'blitz';  leverage ∈ 'inside' | 'outside' (man/blitz)
+  //   jump ∈ null | 'target' | 'other' — the defense JUMPED a route (coach-the-defense):
+  //     'target' = jumped the thrown route (big INT/PBU upside); 'other' = vacated coverage
+  //     elsewhere (the actual target runs free). Default null = bit-identical legacy behavior.
+  //     Pure target-modifiers — adds NO rolls, so distributions stay parity-comparable.
   // Returns { outcome, yards, chain, meta }. outcome ∈ completion|incomplete|pbu|interception|sack.
   function resolvePlay(opts) {
     const route = opts.route, coverage = opts.coverage, leverage = opts.leverage;
     const rec = opts.receiver, defn = opts.defender, lb = opts.lb, qb = opts.qb;
+    const jump = opts.jump || null;
     const rt = ROUTES[route] || ROUTES.slant;
     const depthPen = trunc(Math.max(0, rt.depth - 5) / 2);
     const isBlitz = coverage === 'blitz';
     const isZone = coverage === 'zone';
     const chain = [];
-    const meta = { route: route, coverage: coverage, leverage: leverage, receiver: rec.name,
+    const meta = { route: route, coverage: coverage, leverage: leverage, receiver: rec.name, jump: jump,
                    undercut: false, sep: 0, window: 0, caught: false, intercepted: false,
                    sacked: false, hurried: false };
+    if (jump) {
+      chain.push({
+        key: 'jump', label: 'Jumped route', value: jump === 'target' ? 'read it!' : 'wrong key',
+        status: jump === 'target' ? 'good' : 'bad',
+        detail: jump === 'target' ? defn.name + ' breaks on the ball at the snap'
+                                  : 'A defender vacated his man to jump another route',
+        math: jump === 'target' ? 'sep −25 · ball skills +18 bsu / +30 int' : 'sep +12 · yac +3',
+      });
+    }
 
     // SCREEN — a bet on the blitz. Resolves on coverage ALONE: sack-proof + INT-proof, a chunk vs the
     // vacated blitz front, a wasted down vs a disciplined man/zone front. Own mini-chain (read → screen →
@@ -134,14 +163,15 @@
               : 'A disciplined man front strings the screen out',
         math: 'screen vs ' + cov + ': connect ' + SCREEN_CONNECT[cov] + '%',
       });
+      const conn = SCREEN_CONNECT[cov] + (jump === 'target' ? -35 : 0);   // a jumped screen gets sniffed (stays INT-proof)
       const connRoll = d100();
-      if (connRoll > SCREEN_CONNECT[cov]) {
+      if (connRoll > conn) {
         chain.push({ key: 'screen', label: 'Screen', value: 'blown up', status: 'bad',
-          detail: lb.name + ' sniffs it out — no room to run', math: 'rolled ' + connRoll + ' > ' + SCREEN_CONNECT[cov] });
+          detail: lb.name + ' sniffs it out — no room to run', math: 'rolled ' + connRoll + ' > ' + conn });
         return finish('incomplete', 0, chain, meta);
       }
       meta.caught = true;
-      const screenYac = Math.max(0, SCREEN_YAC[cov] + trunc((rec.r.BTK + rec.r.SPD - lb.r.TKL - lb.r.SPD) / 10) + trunc(d100() / 25));
+      const screenYac = Math.max(0, SCREEN_YAC[cov] + (jump === 'other' ? 4 : 0) + trunc((rec.r.BTK + rec.r.SPD - lb.r.TKL - lb.r.SPD) / 10) + trunc(d100() / 25));
       chain.push({ key: 'screen', label: 'Screen', value: isBlitz ? 'sprung' : 'caught', status: isBlitz ? 'good' : 'neutral',
         detail: isBlitz ? 'Caught behind the rush with blockers ahead' : 'Caught at the line — defenders rally',
         math: 'connect ' + connRoll + ' ≤ ' + SCREEN_CONNECT[cov] });
@@ -150,11 +180,12 @@
       return finish('completion', 1 + screenYac, chain, meta);
     }
 
-    // 1 — separation + read
+    // 1 — separation + read (a jumped target closes the gap; a wrong jump vacates coverage)
+    const jumpSep = jump === 'target' ? -25 : jump === 'other' ? 12 : 0;
     let sepTarget, sepRoll, sepMargin, levB = 0, badRead = false;
     if (isZone) {
       const rteDiff = trunc((rec.r.RTE - defn.r.ZON) / 4);
-      sepTarget = 56 + rt.zoneSep + rteDiff;
+      sepTarget = 56 + rt.zoneSep + rteDiff + jumpSep;
       sepRoll = d100(); sepMargin = sepTarget - sepRoll;
       badRead = rt.zoneSep < 0;
       chain.push({
@@ -169,7 +200,7 @@
       const spdDiff = trunc((rec.r.SPD - defn.r.SPD) / 4);
       const rteDiff = trunc((rec.r.RTE - defn.r.COV) / 2);
       const vacated = isBlitz ? 8 : 0;          // blitz vacates an underneath defender
-      sepTarget = 60 + rt.manBase + levB + spdDiff + rteDiff + vacated;
+      sepTarget = 60 + rt.manBase + levB + spdDiff + rteDiff + vacated + jumpSep;
       sepRoll = d100(); sepMargin = sepTarget - sepRoll;
       badRead = levB < 0;
       chain.push({
@@ -191,9 +222,9 @@
       math: 'margin ' + sepMargin + ' → ' + sep + ' yd',
     });
 
-    // 2 — defender in the throwing lane (none on a blitz — the robber is rushing)
+    // 2 — defender in the throwing lane (none on a blitz; a jump REPLACES the lane story)
     let laneTarget = 0;
-    if (!isBlitz) laneTarget = isZone ? Math.max(2, rt.zoneLane + trunc((lb.r.AWR - 70) / 5)) : 3 + trunc((lb.r.AWR + lb.r.COV) / 12);
+    if (!isBlitz && !jump) laneTarget = isZone ? Math.max(2, rt.zoneLane + trunc((lb.r.AWR - 70) / 5)) : 3 + trunc((lb.r.AWR + lb.r.COV) / 12);
     const laneRoll = d100();
     const inLane = laneTarget > 0 && laneRoll <= laneTarget;
     meta.undercut = inLane;
@@ -238,8 +269,9 @@
       });
     }
 
-    // 4 — QB decision when there's no window (a forced ball gets thrown, not checked down)
-    if (windowSz === 0) {
+    // 4 — QB decision when there's no window (a forced ball gets thrown, not checked down).
+    //     A jumped target LOOKED open at the throw — the bait works, the ball comes out.
+    if (windowSz === 0 && jump !== 'target') {
       let decT = 45 + trunc(qb.r.DEC / 2);
       if (badRead) decT -= 25;
       const decRoll = d100();
@@ -267,13 +299,14 @@
             (hurried ? ' − 14 hurry' : '') + ((windowSz === 0 && badRead) ? ' − forced' : '') + ' = ' + accT + '; rolled ' + accRoll,
     });
 
-    // 6 — defender plays the ball (continuous INT risk: worse on forced + deep throws)
-    const defender = inLane ? lb : (sep === 0 ? defn : null);
+    // 6 — defender plays the ball (continuous INT risk: worse on forced + deep throws;
+    //     a defender who JUMPED the thrown route is driving on the ball)
+    const defender = jump === 'target' ? defn : (inLane ? lb : (sep === 0 ? defn : null));
     if (defender) {
-      const bsuT = 5 + trunc(defender.r.BSU / 4) + QUALITY_PENALTY[quality];
+      const bsuT = 5 + trunc(defender.r.BSU / 4) + QUALITY_PENALTY[quality] + (jump === 'target' ? 18 : 0);
       const bsuRoll = d100();
       if (bsuRoll <= bsuT) {
-        const intT = 10 + trunc(defender.r.BSU / 5) + (windowSz === 0 ? 8 : 0) + Math.max(0, rt.depth - 5) * 2;
+        const intT = 10 + trunc(defender.r.BSU / 5) + (windowSz === 0 ? 8 : 0) + Math.max(0, rt.depth - 5) * 2 + (jump === 'target' ? 30 : 0);
         const intRoll = d100();
         if (intRoll <= intT) {
           meta.intercepted = true;
@@ -313,8 +346,8 @@
       detail: rec.name + ' hauls it in', math: 'catch ' + catchT + '%; rolled ' + catchRoll,
     });
 
-    // 8 — YAC
-    const yac = Math.max(0, rt.yac + trunc((rec.r.BTK + rec.r.SPD - lb.r.TKL - lb.r.SPD) / 10) + trunc(d100() / 25));
+    // 8 — YAC (a vacated defender means open grass for the actual target)
+    const yac = Math.max(0, rt.yac + (jump === 'other' ? 3 : 0) + trunc((rec.r.BTK + rec.r.SPD - lb.r.TKL - lb.r.SPD) / 10) + trunc(d100() / 25));
     chain.push({
       key: 'yac', label: 'Yards after catch', value: '+' + yac + ' yd', status: 'good',
       detail: rec.name + ' picks up ' + yac + ' after the catch', math: rt.yac + ' + athleticism + jitter = ' + yac,

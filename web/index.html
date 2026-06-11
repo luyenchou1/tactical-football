@@ -133,11 +133,37 @@
         <button id="next-btn">Next play ›</button>
       </div>
 
-      <!-- OPPONENT POSSESSION -->
+      <!-- DEFENSIVE PLAY CALL (the user coaches the defense on CPU possessions) -->
+      <div id="defcall" class="panel-stage hidden">
+        <div id="def-ticker"></div>
+        <div class="route-label">Call your coverage</div>
+        <div id="def-coverage">
+          <button class="defcov-btn" data-cov="man" type="button">MAN</button>
+          <button class="defcov-btn" data-cov="zone" type="button">COVER 3</button>
+          <button class="defcov-btn" data-cov="blitz" type="button">BLITZ</button>
+        </div>
+        <div class="route-label">Show them…</div>
+        <div id="def-disguise">
+          <button class="defshow-btn" data-show="man" type="button">Man look</button>
+          <button class="defshow-btn" data-show="zone" type="button">Zone look</button>
+          <button class="defshow-btn" data-show="blitz" type="button">Blitz look</button>
+        </div>
+        <button id="defsnap-btn" disabled>SNAP ›</button>
+      </div>
+
+      <!-- THE PLAY IS LIVE (defense) — jump a route before the throw -->
+      <div id="defread" class="panel-stage hidden">
+        <div id="defread-title">The play is live…</div>
+        <div id="jump-bar"><div id="jump-fill"></div></div>
+        <div id="def-receivers"></div>
+      </div>
+
+      <!-- OPPONENT POSSESSION (drive summary) -->
       <div id="cpu" class="panel-stage hidden">
         <div id="cpu-title">Opponent possession</div>
         <div id="cpu-result">Touchdown</div>
         <div id="cpu-tally">You 0 · Opponent 0</div>
+        <div id="cpu-plays"></div>
         <button id="cpu-continue">Continue ›</button>
       </div>
 

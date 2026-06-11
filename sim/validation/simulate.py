@@ -117,8 +117,13 @@ def _bucket_sep(margin: int) -> int:
 
 def resolve(rec: Player, qb_p: Player, defn: Player, lb: Player,
             route: str = "slant", coverage: str = "man",
-            leverage: str = "outside") -> dict:
-    """Resolve the targeted receiver's route. Mirror of JS resolvePlay()."""
+            leverage: str = "outside", jump: Optional[str] = None) -> dict:
+    """Resolve the targeted receiver's route. Mirror of JS resolvePlay().
+
+    jump: None | 'target' | 'other' — the defense jumped a route (coach-the-defense).
+    'target' = jumped the thrown route (big INT/PBU upside); 'other' = vacated coverage
+    elsewhere. None = bit-identical legacy behavior. Pure target-modifiers, no new rolls.
+    """
     rt = ROUTES[route]
     depth_pen = max(0, rt["depth"] - 5) // 2
     is_blitz = coverage == "blitz"
@@ -129,31 +134,33 @@ def resolve(rec: Player, qb_p: Player, defn: Player, lb: Player,
     # EXACTLY 2 rolls (connect, then yac) in this order to stay aligned with the JS branch.
     if rt.get("screen"):
         cov = "blitz" if is_blitz else "zone" if is_zone else "man"
+        conn = SCREEN_CONNECT[cov] + (-35 if jump == "target" else 0)  # a jumped screen gets sniffed (stays INT-proof)
         conn_roll = d100()
-        if conn_roll > SCREEN_CONNECT[cov]:
+        if conn_roll > conn:
             return {"outcome": "incomplete", "yards": 0}
-        screen_yac = max(0, SCREEN_YAC[cov]
+        screen_yac = max(0, SCREEN_YAC[cov] + (4 if jump == "other" else 0)
                          + (rec.r("BTK") + rec.r("SPD") - lb.r("TKL") - lb.r("SPD")) // 10
                          + d100() // 25)
         return {"outcome": "completion", "yards": 1 + screen_yac}
 
-    # separation + read
+    # separation + read (a jumped target closes the gap; a wrong jump vacates coverage)
+    jump_sep = -25 if jump == "target" else 12 if jump == "other" else 0
     if is_zone:
         rte_diff = (rec.r("RTE") - defn.r("ZON")) // 4
-        sep_target = 56 + rt["zone_sep"] + rte_diff
+        sep_target = 56 + rt["zone_sep"] + rte_diff + jump_sep
         bad_read = rt["zone_sep"] < 0
     else:
         lev_b = lev_term(rt["break"], leverage)
         spd_diff = (rec.r("SPD") - defn.r("SPD")) // 4
         rte_diff = (rec.r("RTE") - defn.r("COV")) // 2
         vacated = 8 if is_blitz else 0
-        sep_target = 60 + rt["man_base"] + lev_b + spd_diff + rte_diff + vacated
+        sep_target = 60 + rt["man_base"] + lev_b + spd_diff + rte_diff + vacated + jump_sep
         bad_read = lev_b < 0
     base_sep = _bucket_sep(check_margin(sep_target))
 
-    # defender in the throwing lane (none on a blitz — the robber is rushing)
+    # defender in the throwing lane (none on a blitz; a jump REPLACES the lane story)
     lane_target = 0
-    if not is_blitz:
+    if not is_blitz and jump is None:
         lane_target = (max(2, rt["zone_lane"] + (lb.r("AWR") - 70) // 5) if is_zone
                        else 3 + (lb.r("AWR") + lb.r("COV")) // 12)
     in_lane = lane_target > 0 and check(lane_target)
@@ -172,8 +179,8 @@ def resolve(rec: Player, qb_p: Player, defn: Player, lb: Player,
     elif p_roll <= sack_p + hurry_p:
         hurried = True
 
-    # QB decision when there's no window (a forced ball gets thrown, not checked down)
-    if eff_window == 0:
+    # QB decision when there's no window (a jumped target LOOKED open — the ball comes out)
+    if eff_window == 0 and jump != "target":
         dec_t = 45 + qb_p.r("DEC") // 2
         if bad_read:
             dec_t -= 25
@@ -190,12 +197,13 @@ def resolve(rec: Player, qb_p: Player, defn: Player, lb: Player,
     quality = ("great" if m >= 40 else "good" if m >= 15 else "ok"
                if m >= -10 else "low" if m >= -30 else "bad")
 
-    # defender plays the ball (continuous INT risk: worse on forced + deep throws)
-    defender = lb if in_lane else (defn if base_sep == 0 else None)
+    # defender plays the ball (a defender who JUMPED the thrown route is driving on it)
+    defender = defn if jump == "target" else (lb if in_lane else (defn if base_sep == 0 else None))
     if defender is not None:
-        bsu_target = 5 + defender.r("BSU") // 4 + QUALITY_PENALTY[quality]
+        bsu_target = 5 + defender.r("BSU") // 4 + QUALITY_PENALTY[quality] + (18 if jump == "target" else 0)
         if check(bsu_target):
-            int_t = 10 + defender.r("BSU") // 5 + (8 if eff_window == 0 else 0) + max(0, rt["depth"] - 5) * 2
+            int_t = (10 + defender.r("BSU") // 5 + (8 if eff_window == 0 else 0)
+                     + max(0, rt["depth"] - 5) * 2 + (30 if jump == "target" else 0))
             if check(int_t):
                 return {"outcome": "interception", "yards": 0}
             return {"outcome": "pbu", "yards": 0}
@@ -208,8 +216,9 @@ def resolve(rec: Player, qb_p: Player, defn: Player, lb: Player,
     if not check(catch_target):
         return {"outcome": "incomplete", "yards": 0}
 
-    # YAC
-    yac = max(0, rt["yac"] + (rec.r("BTK") + rec.r("SPD") - lb.r("TKL") - lb.r("SPD")) // 10 + d100() // 25)
+    # YAC (a vacated defender means open grass for the actual target)
+    yac = max(0, rt["yac"] + (3 if jump == "other" else 0)
+              + (rec.r("BTK") + rec.r("SPD") - lb.r("TKL") - lb.r("SPD")) // 10 + d100() // 25)
     return {"outcome": "completion", "yards": rt["depth"] + yac}
 
 

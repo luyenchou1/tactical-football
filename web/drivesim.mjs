@@ -2,7 +2,9 @@
 // Requires the REAL engine (web/sim.js). Models a 5-drive game:
 //   - each player drive: pick-play -> pick-target -> snap, resolved by Sim.resolvePlay
 //   - drive ends on TD / turnover-on-downs / INT (advanceDown logic mirrored from game.js)
-//   - between player drives, an abstracted CPU possession: TD 46% / FG 26% / punt 28%
+//   - between player drives, a REAL CPU drive: the rival offense (oppQb + opp receivers)
+//     runs the same engine vs a random-proxy user defense — the brain below MIRRORS
+//     game.js (keep in lockstep). Starts at their 35; FG/punt on 4th down.
 //   - defense per play: zone 0.35 / blitz 0.20 / man 0.45 (mirror game.js newPlay)
 //   - per-defender leverage: random inside/outside (mirror game.js levMap)
 // Win = final player score > CPU score over 5 drives.
@@ -115,12 +117,89 @@ function playDrive(chooser, stats) {
   return state.score;
 }
 
-// CPU possession (mirror game.js showCpuPossession): TD 46% / FG 26% / punt 28%.
-function cpuPossession() {
-  const roll = Math.random();
-  if (roll < 0.46) return 7;
-  if (roll < 0.72) return 3;
-  return 0;
+// ---- the CPU QB brain (MIRROR of game.js coach-the-defense — keep in lockstep) ----
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+const BRAIN_W = {
+  short: { slants: 3, mesh: 2.5, stick: 2, spacing: 2, smash: 1, flood: 1, screen: 1, verticals: .5, wheel: .5 },
+  med:   { slants: 2, mesh: 2, stick: 2, spacing: 2, smash: 2, flood: 2, screen: 1, verticals: 1, wheel: 1 },
+  long:  { slants: 1, mesh: 1.5, stick: 2, spacing: 2, smash: 2, flood: 2.5, screen: 1, verticals: 1.5, wheel: 1.5 },
+  xlong: { slants: .5, mesh: 1.5, stick: 1, spacing: 1, smash: 2, flood: 2.5, screen: 1.5, verticals: 2.5, wheel: 2 },
+};
+const COV_MULT = {
+  blitz: { screen: 3, slants: 2, mesh: 1.5 },
+  zone:  { stick: 1.6, spacing: 1.6, flood: 1.6, smash: 1.3 },
+  man:   { mesh: 1.6, slants: 1.4, wheel: 1.6 },
+};
+const ELIGIBLE_DEF = [
+  { key: 'oppX',    routeKey: 'x',    defKey: 'myCbX' },
+  { key: 'oppZ',    routeKey: 'z',    defKey: 'myCbZ' },
+  { key: 'oppSlot', routeKey: 'slot', defKey: 'myNb'  },
+  { key: 'oppTe',   routeKey: 'te',   defKey: 'mySs'  },
+  { key: 'oppRb',   routeKey: 'rb',   defKey: 'myMlb' },
+];
+
+function brainPickPlay(distance, believed) {
+  const bucket = distance <= 3 ? 'short' : distance <= 7 ? 'med' : distance <= 12 ? 'long' : 'xlong';
+  const w = BRAIN_W[bucket], mult = COV_MULT[believed] || {};
+  let total = 0;
+  const weights = PLAYS.map((pl) => { const v = (w[pl.id] || 1) * (mult[pl.id] || 1); total += v; return v; });
+  let roll = Math.random() * total;
+  for (let i = 0; i < PLAYS.length; i++) { roll -= weights[i]; if (roll <= 0) return PLAYS[i]; }
+  return PLAYS[PLAYS.length - 1];
+}
+function brainPickTarget(play, believed, levMap) {
+  const ranked = ELIGIBLE_DEF.map((e) => {
+    const route = play.routes[e.routeKey];
+    const lev = believed === 'zone' ? null : levMap[e.defKey];
+    return { e, route, score: STATUS_RANK[Sim.readStatus(route, believed, lev)] * 100 + Sim.routeDepth(route) };
+  }).sort((a, b) => b.score - a.score);
+  const r = Math.random();                              // ε-greedy: 75% best / 18% second / 7% the rest
+  if (r < 0.75) return ranked[0];
+  if (r < 0.93) return ranked[1];
+  return ranked[2 + Math.floor(Math.random() * 3)];
+}
+
+// One REAL CPU drive vs a defense chooser ({coverage, shown} per play). Mirror of game.js
+// runDefPossession: start at their 35; on 4th down kick a FG (in range) or punt — never go.
+function playDefDrive(defChooser) {
+  const state = { ballOn: 34, down: 1, distance: 10, plays: 0, over: false, res: null, score: 0 };
+  const sniffP = clamp(Math.floor(P.oppQb.r.DEC / 3) / 100, 0.20, 0.33);
+  let guard = 0;
+  while (!state.over && guard++ < 200) {
+    if (state.down === 4) {
+      if (state.ballOn >= 65) {
+        const dist = (100 - state.ballOn) + 17;
+        const makeP = clamp(1.02 - 0.014 * (dist - 20), 0.15, 0.96);
+        if (Math.random() < makeP) { state.score += 3; state.res = 'fg'; } else { state.res = 'fgmiss'; }
+      } else { state.res = 'punt'; }
+      state.over = true;
+      break;
+    }
+    const call = defChooser(state);
+    const levMap = {};
+    for (const k of ['myCbX', 'myCbZ', 'myNb', 'mySs', 'myMlb']) levMap[k] = Math.random() < 0.5 ? 'outside' : 'inside';
+    const believed = Math.random() < sniffP ? call.coverage : call.shown;   // he sniffs the bluff sniffP of the time
+    const play = brainPickPlay(state.distance, believed);
+    const choice = brainPickTarget(play, believed, levMap);
+    const result = Sim.resolvePlay({
+      route: choice.route, coverage: call.coverage, leverage: levMap[choice.e.defKey],
+      receiver: P[choice.e.key], defender: P[choice.e.defKey], lb: P.myMlb, qb: P.oppQb,
+    });
+    advance(state, result);
+  }
+  return state.score;
+}
+
+// The proxy user-defense for balance runs: coverage 45/35/20, honest look 75% (mirror newPlay).
+function defRandomProxy() {
+  const cr = Math.random();
+  const coverage = cr < 0.35 ? 'zone' : cr < 0.55 ? 'blitz' : 'man';
+  let shown = coverage;
+  if (Math.random() < 0.25) {
+    const others = ['man', 'zone', 'blitz'].filter((l) => l !== coverage);
+    shown = others[Math.floor(Math.random() * others.length)];
+  }
+  return { coverage, shown };
 }
 
 const DRIVES_PER_GAME = 5;
@@ -130,7 +209,7 @@ function playGame(chooser, stats) {
   let player = 0, cpu = 0;
   for (let d = 0; d < DRIVES_PER_GAME; d++) {
     player += playDrive(chooser, stats);
-    cpu += cpuPossession();        // one CPU possession per player drive (game.js: cpu turn after each drive)
+    cpu += playDefDrive(defRandomProxy);   // one REAL CPU drive per player drive
   }
   return { win: player > cpu, tie: player === cpu, loss: player < cpu, player, cpu };
 }
@@ -154,8 +233,15 @@ function measure(name, chooser, games) {
 
 const games = Number(process.argv[2] || 20000);
 
-console.log(`Drive-level win rates — ${games} games each — CPU TD46/FG26/punt28, def zone.35/blitz.20/man.45`);
+console.log(`Drive-level win rates — ${games} games each — CPU = REAL drives (Mercer's offense, start@35), def zone.35/blitz.20/man.45`);
 console.log('='.repeat(96));
+// coverage headroom: what the CPU averages per possession against each fixed defensive call
+{
+  const N = Math.max(4000, Math.floor(games / 4));
+  const fixed = (cov) => () => ({ coverage: cov, shown: cov });
+  const pts = (chooser) => { let t = 0; for (let i = 0; i < N; i++) t += playDefDrive(chooser); return (t / N).toFixed(2); };
+  console.log(`CPU pts/poss vs fixed coverage — man ${pts(fixed('man'))} · zone ${pts(fixed('zone'))} · blitz ${pts(fixed('blitz'))} · random ${pts(defRandomProxy)}  (${N} drives each)`);
+}
 for (const [label, chooser] of [['random masher', chooseRandom], ['coverage reader', chooseSmart], ['always-deepest', chooseDeepest]]) {
   const m = measure(label, chooser, games);
   const o = m.stats.byOutcome, pl = m.stats.plays;

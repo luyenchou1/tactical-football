@@ -368,6 +368,7 @@ html, body {
 .callout.td { color: #f8b800; }
 .callout.int, .callout.sack { color: #ff5a3c; }
 .callout.dime, .callout.first { color: #46ff7a; }
+.callout.takeaway, .callout.stop { color: #46ff7a; }   /* defensive triumphs read green — they're YOURS */
 .callout.bigplay { color: #ffd23c; }
 .callout.slam { animation: tf-slam 1.05s ease-out forwards; }
 @keyframes tf-slam {
@@ -601,6 +602,50 @@ html, body {
   background: var(--star); color: #000; padding: 2px 3px; border-radius: 4px;   /* gold = earned (green-on-green vanishes) */
 }
 #roster-done { margin-top: 2px; }
+
+/* ========== COACH THE DEFENSE (CPU possessions) ========== */
+/* the broadcast camera flips ends: field-role classes keep their geometry, the
+   PALETTES swap — your defenders read blue, the rival offense red */
+#field.swap .chip.off { background: var(--def); border-color: var(--def-edge); }
+#field.swap .chip.def { background: var(--off); border-color: var(--off-edge); }
+#hud.theirball .hud-cell:nth-child(2) span:last-child { color: var(--def); }   /* DOWN cell tints red on their ball */
+#def-ticker {
+  text-align: center; font-family: var(--font-term); font-size: 17px; letter-spacing: .02em;
+  padding: 8px 12px; border-radius: 8px; background: rgba(232, 84, 62, 0.10);
+  border: 1px solid rgba(232, 84, 62, 0.35); color: var(--ink); min-height: 38px;
+}
+#def-coverage { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.defcov-btn {
+  background: var(--panel-2); color: var(--ink);
+  border: 1.5px solid #2a323e; border-radius: 10px; padding: 14px 4px; cursor: pointer;
+  font-family: var(--font-arcade); font-size: 11px; letter-spacing: .02em;
+  transition: border-color .15s, background .15s, transform .08s; touch-action: manipulation;
+}
+.defcov-btn:active { transform: scale(0.97); }
+.defcov-btn.selected { border-color: var(--star); background: #232a36; }
+#def-disguise { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.defshow-btn {
+  background: transparent; color: var(--muted);
+  border: 1px solid #2a323e; border-radius: 10px; padding: 8px 4px; cursor: pointer;
+  font-family: var(--font-term); font-size: 14px; touch-action: manipulation;
+}
+.defshow-btn.selected { color: var(--ink); border-color: var(--los); }
+#defsnap-btn { background: var(--def); }   /* the defensive CTA reads red */
+#defread-title { font-family: var(--font-arcade); font-size: var(--fs-micro); letter-spacing: .08em; color: var(--muted); text-align: center; text-transform: uppercase; }
+#jump-bar { height: 10px; background: #20242e; border-radius: 5px; overflow: hidden; }
+#jump-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--def), var(--fire-out)); border-radius: 5px; }
+#def-receivers { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.chip.jumping {   /* your defender breaking on a route — gold ring + a snappier lunge */
+  box-shadow: 0 0 0 3px var(--star), 0 0 14px var(--star), 0 3px 0 rgba(0,0,0,.5);
+  z-index: 7;
+  transition: left .25s cubic-bezier(.2,.8,.3,1), top .25s cubic-bezier(.2,.8,.3,1), scale .18s ease;
+}
+#def-receivers .target-btn.selected { border-color: var(--star); background: #232a36; }
+#cpu-plays { width: 100%; display: flex; flex-direction: column; gap: 1px; background: #222a35; border-radius: 8px; overflow: hidden; }
+.cpu-play-row { background: var(--panel-2); padding: 6px 10px; font-family: var(--font-term); font-size: 14px; color: var(--muted); text-align: left; }
+.cpu-play-row b { color: var(--ink); font-weight: normal; }
+.cpu-play-row.good { color: var(--good); }
+.cpu-play-row.bad { color: var(--bad); }
 
 /* 8-bit portraits (procedural canvas busts from portraits.js) */
 .pix-portrait { image-rendering: pixelated; flex: none; }
