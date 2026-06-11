@@ -143,6 +143,36 @@
     return _bus;
   }
 
+  // ---- ambience output: the crowd bed + band BYPASS the glue compressor. Steady
+  //      background must not be sidechained by one-shots — every hut/whistle/hit was
+  //      ducking the bed 6-15dB ("the crowd drops out every few seconds").
+  var _bedOut = null;
+  function bedOut() {
+    if (typeof zzfxX === 'undefined') return null;
+    if (_bedOut) return _bedOut;
+    try { var g = zzfxX.createGain(); g.gain.value = 1; g.connect(zzfxX.destination); _bedOut = g; }
+    catch (e) { _bedOut = zzfxX.destination; }
+    return _bedOut;
+  }
+
+  // first audibly-loud moment of a decoded clip (recordings often carry a silent head —
+  // crowd3 ~2.5s, band1 ~2.8s; looping or starting inside it = a literal dropout).
+  // RMS per 50ms window vs an absolute floor; cached on the buffer.
+  function firstAudible(buf) {
+    if (typeof buf._fa === 'number') return buf._fa;
+    var fa = 0;
+    try {
+      var d = buf.getChannelData(0), sr = buf.sampleRate, win = (sr / 20) | 0, thr = 0.008;
+      for (var i = 0; i < d.length; i += win) {
+        var s = 0, n = Math.min(win, d.length - i);
+        for (var j = 0; j < n; j++) s += d[i + j] * d[i + j];
+        if (Math.sqrt(s / n) > thr) { fa = Math.max(0, i / sr - 0.05); break; }
+      }
+    } catch (e) {}
+    buf._fa = fa;
+    return fa;
+  }
+
   // ---- recorded-sample playback: prefer a real clip, fall back to procedural ----
   //   MP3s in web/sfx/ are decoded to AudioBuffers on the first gesture, played
   //   through the same compressor bus as the synth, round-robined per key, and
@@ -678,14 +708,18 @@
     ensureUnlock();
     try {
       var c = zzfxX, t = c.currentTime;
-      var g = c.createGain(); g.gain.value = 0.0001; g.connect(busIn());
+      var g = c.createGain(); g.gain.value = 0.0001; g.connect(bedOut());   // NOT busIn() — SFX must not duck the bed
       g.gain.linearRampToValueAtTime(CROWD_LOW, t + 1.2);              // fade in to the resting level
       var per = bufs.length > 1 ? 0.7 : 1.0;                            // don't double up when layering
       var nodes = bufs.map(function (buf, i) {
         var src = c.createBufferSource(); src.buffer = buf; src.loop = true;
+        var ls = firstAudible(buf);
+        src.loopStart = ls; src.loopEnd = buf.duration;                 // loop ONLY the audible region (the clip's silent head was a 2.5s dropout every wrap)
         var sg = c.createGain(); sg.gain.value = per;
         src.connect(sg); sg.connect(g);
-        src.start(t + i * 0.17, buf.duration > 2 ? Math.random() * (buf.duration - 1) : 0);   // begin mid-clip = a different section each game
+        var span = buf.duration - ls;
+        var off = ls + (span > 2 ? Math.random() * (span - 1) : 0);     // begin mid-clip = a different section each game (never in the silent head)
+        src.start(t + i * 0.17, off);
         return src;
       });
       _crowdBed = { g: g, nodes: nodes };
@@ -728,11 +762,13 @@
     ensureUnlock();
     try {
       var c = zzfxX, t = c.currentTime, buf = bufs[0];
-      var off = buf.duration > 14 ? Math.random() * (buf.duration - 12) : 0;     // a different section each time
+      var lead = firstAudible(buf);                                              // skip the clip's silent head (it made the band fire dead air)
+      var span = buf.duration - lead;
+      var off = lead + (span > 14 ? Math.random() * (span - 12) : 0);            // a different section each time
       var playFor = Math.min(buf.duration - off, 11);                            // ~11s chunk
       var src = c.createBufferSource(); src.buffer = buf;
       var g = c.createGain(); g.gain.value = 0.0001;
-      src.connect(g); g.connect(busIn());
+      src.connect(g); g.connect(bedOut());                                       // ambience lane — not ducked by SFX
       g.gain.linearRampToValueAtTime(BAND_LEVEL, t + 1.5);                        // fade in
       g.gain.setValueAtTime(BAND_LEVEL, t + Math.max(1.5, playFor - 1.5));
       g.gain.linearRampToValueAtTime(0.0001, t + playFor);                        // fade out
