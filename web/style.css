@@ -602,6 +602,11 @@ html, body {
 }
 #roster-done { margin-top: 2px; }
 
+/* 8-bit portraits (procedural canvas busts from portraits.js) */
+.pix-portrait { image-rendering: pixelated; flex: none; }
+.ros-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ros-port { flex: none; line-height: 0; }
+
 /* profile-card additions: the live box-score line + inline tuning badges */
 .card-line {
   font-family: var(--font-term); font-size: 15px; letter-spacing: .01em;

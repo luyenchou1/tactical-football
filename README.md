@@ -110,6 +110,7 @@ It respects `prefers-reduced-motion` (shake/particles/slam off, feedback kept) a
 - [x] Deep shots — go / post / corner verticals: the post/corner leverage read downfield, Four Verticals + Smash, the shot as the blitz answer (tuned so blind bombing stays break-even)
 - [x] Playbook II — an RB **screen** (the blitz-beater mirror of the bomb: a dedicated sack/INT-proof branch that's a chunk vs the vacated blitz but a wasted down vs a disciplined front), a **Flood** (corner/sail/flat sideline stretch — a new *shape* of zone-beater), and an RB **Wheel** (a man-beater that finally varies the back off the flat)
 - [x] Player profiles & tuning — a **TUNE YOUR SQUAD** screen off the start menu: allocate a 15-point bonus pool across the offense's *engine-live* attributes only (each with a one-line "what it does" caption — no fake knobs; ARM/STA stay display-only), capped at 99, persisted per device; tap any chip in-game for a **profile card** with gold tuning badges and a live box-score line (REC/YDS/TD/TGT; the QB gets a derived passing line incl. INTs and sacks)
+- [x] 8-bit player portraits — procedural pixel busts (a 16×18 canvas grid, no image assets): every player gets a hand-tuned look (skin tone, brow attitude, facial hair, eye black, helmet stripes, a mirrored visor on the lockdown corner) on the profile cards and the roster screen
 - [ ] Safety help in the model — a true single-high robber bracketing the deep post
 
 ## The Swift simulator

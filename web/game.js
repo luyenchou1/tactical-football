@@ -417,6 +417,10 @@
       '<div class="card-grid">' + grid + '</div>' +
       '<button class="card-close">Close</button>';
     cardEl.querySelector('.card-close').addEventListener('click', hideCard);
+    if (window.Portraits) {   // 8-bit bust leads the card
+      const top = cardEl.querySelector('.card-top');
+      top.insertBefore(Portraits.canvas(p.simKey, p.team, 3), top.firstChild);
+    }
     cardLayer.classList.remove('hidden');
   }
   function hideCard() { cardLayer.classList.add('hidden'); }
@@ -1577,10 +1581,12 @@
     });
     document.getElementById('roster-tabs').innerHTML = tabs;
     const pl = P[rosterTab];
-    document.getElementById('roster-player').innerHTML =
-      '<div><div class="ros-name">' + pl.name + '</div>' +
-      '<div class="ros-pos">' + pl.pos + ' · <span class="stars">' + starStr(avgRating(pl.r)) + '</span></div></div>' +
+    const rpEl = document.getElementById('roster-player');
+    rpEl.innerHTML =
+      '<div class="ros-id"><span class="ros-port"></span><div><div class="ros-name">' + pl.name + '</div>' +
+      '<div class="ros-pos">' + pl.pos + ' · <span class="stars">' + starStr(avgRating(pl.r)) + '</span></div></div></div>' +
       '<button class="ghost-btn" id="roster-reset" type="button">Reset</button>';
+    if (window.Portraits) rpEl.querySelector('.ros-port').appendChild(Portraits.canvas(rosterTab, 'off', 4));
     let rows = '';
     TUNABLE[rosterTab].forEach(function (a) {
       const base = Sim.DEFAULT_PLAYERS[rosterTab].r[a];
